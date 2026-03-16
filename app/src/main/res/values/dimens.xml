@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 通用间距 -->
+    <dimen name="space_xs">4dp</dimen>
+    <dimen name="space_sm">6dp</dimen>
+    <dimen name="space_md">8dp</dimen>
+    <dimen name="space_lg">12dp</dimen>
+    <dimen name="space_xl">16dp</dimen>
+
+    <!-- 容器尺寸 -->
+    <dimen name="height_search_box">40dp</dimen>
+    <dimen name="height_bottom_nav">72dp</dimen>
+
+    <!-- 图标尺寸 -->
+    <dimen name="icon_size_search_inner">18dp</dimen>
+    <dimen name="icon_size_small">22dp</dimen>
+    <dimen name="icon_size_medium">24dp</dimen>
+    <dimen name="icon_size_large">28dp</dimen>
+
+    <!-- 文字尺寸 -->
+    <dimen name="text_size_tab">12sp</dimen>
+    <dimen name="text_size_action">13sp</dimen>
+    <dimen name="text_size_body">14sp</dimen>
+    <dimen name="text_size_dashboard_number">24sp</dimen>
+</resources>

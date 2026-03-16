@@ -1,0 +1,531 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/bg_page"
+    tools:context=".MainActivity">
+
+    <!-- 顶部工具栏 (Header)：左侧扫一扫图标 + 中间搜索框 + 右侧消息通知图标 -->
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/layout_header"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="@dimen/space_xl"
+        android:layout_marginTop="@dimen/space_xl"
+        android:layout_marginEnd="@dimen/space_xl"
+        android:paddingTop="@dimen/space_md"
+        android:paddingBottom="@dimen/space_md"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <!-- 图标含义：扫一扫 -->
+        <ImageView
+            android:id="@+id/iv_scan"
+            android:layout_width="@dimen/icon_size_medium"
+            android:layout_height="@dimen/icon_size_medium"
+            android:contentDescription="扫一扫"
+            android:src="@android:drawable/ic_menu_camera"
+            app:layout_constraintBottom_toBottomOf="@id/layout_search_box"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="@id/layout_search_box" />
+
+        <androidx.constraintlayout.widget.ConstraintLayout
+            android:id="@+id/layout_search_box"
+            android:layout_width="0dp"
+            android:layout_height="@dimen/height_search_box"
+            android:layout_marginStart="@dimen/space_lg"
+            android:layout_marginEnd="@dimen/space_lg"
+            android:background="@color/bg_search_box"
+            android:paddingStart="@dimen/space_lg"
+            android:paddingEnd="@dimen/space_lg"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toStartOf="@id/iv_message"
+            app:layout_constraintStart_toEndOf="@id/iv_scan"
+            app:layout_constraintTop_toTopOf="parent">
+
+            <!-- 图标含义：搜索 -->
+            <ImageView
+                android:id="@+id/iv_search"
+                android:layout_width="@dimen/icon_size_search_inner"
+                android:layout_height="@dimen/icon_size_search_inner"
+                android:contentDescription="搜索"
+                android:src="@android:drawable/ic_menu_search"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toTopOf="parent" />
+
+            <TextView
+                android:id="@+id/tv_search_hint"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="@dimen/space_md"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:text="输入手机号/运单号"
+                android:textColor="@color/text_hint"
+                android:textSize="@dimen/text_size_body"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toEndOf="@id/iv_search"
+                app:layout_constraintTop_toTopOf="parent" />
+        </androidx.constraintlayout.widget.ConstraintLayout>
+
+        <!-- 图标含义：消息通知 -->
+        <ImageView
+            android:id="@+id/iv_message"
+            android:layout_width="@dimen/icon_size_medium"
+            android:layout_height="@dimen/icon_size_medium"
+            android:contentDescription="消息通知"
+            android:src="@android:drawable/ic_dialog_email"
+            app:layout_constraintBottom_toBottomOf="@id/layout_search_box"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toTopOf="@id/layout_search_box" />
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+    <!-- 数据看板 (Data Dashboard)：三个等宽统计项（今日入库、今日出库、滞留件） -->
+    <LinearLayout
+        android:id="@+id/layout_dashboard"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="@dimen/space_xl"
+        android:layout_marginTop="@dimen/space_xl"
+        android:layout_marginEnd="@dimen/space_xl"
+        android:background="@color/bg_card"
+        android:orientation="horizontal"
+        android:padding="@dimen/space_xl"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/layout_header">
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/tv_today_inbound"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="128"
+                android:textColor="@color/text_primary"
+                android:textSize="@dimen/text_size_dashboard_number"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/tv_today_inbound_label"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_sm"
+                android:text="今日入库"
+                android:textColor="@color/text_secondary"
+                android:textSize="@dimen/text_size_tab" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/tv_today_outbound"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="96"
+                android:textColor="@color/text_primary"
+                android:textSize="@dimen/text_size_dashboard_number"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/tv_today_outbound_label"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_sm"
+                android:text="今日出库"
+                android:textColor="@color/text_secondary"
+                android:textSize="@dimen/text_size_tab" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/tv_pending_packages"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="14"
+                android:textColor="@color/text_primary"
+                android:textSize="@dimen/text_size_dashboard_number"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/tv_pending_packages_label"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_sm"
+                android:text="滞留件"
+                android:textColor="@color/text_secondary"
+                android:textSize="@dimen/text_size_tab" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- 核心业务区 (Action Grid)：两行四列功能网格（共8个入口） -->
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/layout_action_grid"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="@dimen/space_xl"
+        android:layout_marginTop="@dimen/space_xl"
+        android:layout_marginEnd="@dimen/space_xl"
+        android:background="@color/bg_card"
+        android:padding="@dimen/space_lg"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/layout_dashboard">
+
+        <LinearLayout
+            android:id="@+id/item_quick_inbound"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:paddingTop="@dimen/space_lg"
+            android:paddingBottom="@dimen/space_lg"
+            app:layout_constraintEnd_toStartOf="@id/item_check_express"
+            app:layout_constraintHorizontal_chainStyle="spread"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent">
+
+            <!-- 图标含义：快速入库 -->
+            <ImageView
+                android:id="@+id/iv_quick_inbound"
+                android:layout_width="@dimen/icon_size_large"
+                android:layout_height="@dimen/icon_size_large"
+                android:contentDescription="快速入库"
+                android:src="@android:drawable/ic_input_add" />
+
+            <TextView
+                android:id="@+id/tv_quick_inbound"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_md"
+                android:text="快速入库"
+                android:textColor="@color/text_action"
+                android:textSize="@dimen/text_size_action" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/item_check_express"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:paddingTop="@dimen/space_lg"
+            android:paddingBottom="@dimen/space_lg"
+            app:layout_constraintEnd_toStartOf="@id/item_send_package"
+            app:layout_constraintStart_toEndOf="@id/item_quick_inbound"
+            app:layout_constraintTop_toTopOf="parent">
+
+            <!-- 图标含义：查快递 -->
+            <ImageView
+                android:id="@+id/iv_check_express"
+                android:layout_width="@dimen/icon_size_large"
+                android:layout_height="@dimen/icon_size_large"
+                android:contentDescription="查快递"
+                android:src="@android:drawable/ic_menu_search" />
+
+            <TextView
+                android:id="@+id/tv_check_express"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_md"
+                android:text="查快递"
+                android:textColor="@color/text_action"
+                android:textSize="@dimen/text_size_action" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/item_send_package"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:paddingTop="@dimen/space_lg"
+            android:paddingBottom="@dimen/space_lg"
+            app:layout_constraintEnd_toStartOf="@id/item_customer_manage"
+            app:layout_constraintStart_toEndOf="@id/item_check_express"
+            app:layout_constraintTop_toTopOf="parent">
+
+            <!-- 图标含义：寄件 -->
+            <ImageView
+                android:id="@+id/iv_send_package"
+                android:layout_width="@dimen/icon_size_large"
+                android:layout_height="@dimen/icon_size_large"
+                android:contentDescription="寄件"
+                android:src="@android:drawable/ic_menu_send" />
+
+            <TextView
+                android:id="@+id/tv_send_package"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_md"
+                android:text="寄件"
+                android:textColor="@color/text_action"
+                android:textSize="@dimen/text_size_action" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/item_customer_manage"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:paddingTop="@dimen/space_lg"
+            android:paddingBottom="@dimen/space_lg"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toEndOf="@id/item_send_package"
+            app:layout_constraintTop_toTopOf="parent">
+
+            <!-- 图标含义：客户管理 -->
+            <ImageView
+                android:id="@+id/iv_customer_manage"
+                android:layout_width="@dimen/icon_size_large"
+                android:layout_height="@dimen/icon_size_large"
+                android:contentDescription="客户管理"
+                android:src="@android:drawable/ic_menu_myplaces" />
+
+            <TextView
+                android:id="@+id/tv_customer_manage"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_md"
+                android:text="客户管理"
+                android:textColor="@color/text_action"
+                android:textSize="@dimen/text_size_action" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/item_data_statistics"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:paddingTop="@dimen/space_lg"
+            android:paddingBottom="@dimen/space_lg"
+            app:layout_constraintEnd_toStartOf="@id/item_station_setting"
+            app:layout_constraintHorizontal_chainStyle="spread"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/item_quick_inbound">
+
+            <!-- 图标含义：数据统计 -->
+            <ImageView
+                android:id="@+id/iv_data_statistics"
+                android:layout_width="@dimen/icon_size_large"
+                android:layout_height="@dimen/icon_size_large"
+                android:contentDescription="数据统计"
+                android:src="@android:drawable/ic_menu_sort_by_size" />
+
+            <TextView
+                android:id="@+id/tv_data_statistics"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_md"
+                android:text="数据统计"
+                android:textColor="@color/text_action"
+                android:textSize="@dimen/text_size_action" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/item_station_setting"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:paddingTop="@dimen/space_lg"
+            android:paddingBottom="@dimen/space_lg"
+            app:layout_constraintEnd_toStartOf="@id/item_order_manage"
+            app:layout_constraintStart_toEndOf="@id/item_data_statistics"
+            app:layout_constraintTop_toBottomOf="@id/item_check_express">
+
+            <!-- 图标含义：驿站设置 -->
+            <ImageView
+                android:id="@+id/iv_station_setting"
+                android:layout_width="@dimen/icon_size_large"
+                android:layout_height="@dimen/icon_size_large"
+                android:contentDescription="驿站设置"
+                android:src="@android:drawable/ic_menu_manage" />
+
+            <TextView
+                android:id="@+id/tv_station_setting"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_md"
+                android:text="驿站设置"
+                android:textColor="@color/text_action"
+                android:textSize="@dimen/text_size_action" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/item_order_manage"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:paddingTop="@dimen/space_lg"
+            android:paddingBottom="@dimen/space_lg"
+            app:layout_constraintEnd_toStartOf="@id/item_message_center"
+            app:layout_constraintStart_toEndOf="@id/item_station_setting"
+            app:layout_constraintTop_toBottomOf="@id/item_send_package">
+
+            <!-- 图标含义：订单管理 -->
+            <ImageView
+                android:id="@+id/iv_order_manage"
+                android:layout_width="@dimen/icon_size_large"
+                android:layout_height="@dimen/icon_size_large"
+                android:contentDescription="订单管理"
+                android:src="@android:drawable/ic_menu_agenda" />
+
+            <TextView
+                android:id="@+id/tv_order_manage"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_md"
+                android:text="订单管理"
+                android:textColor="@color/text_action"
+                android:textSize="@dimen/text_size_action" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/item_message_center"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:paddingTop="@dimen/space_lg"
+            android:paddingBottom="@dimen/space_lg"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toEndOf="@id/item_order_manage"
+            app:layout_constraintTop_toBottomOf="@id/item_customer_manage">
+
+            <!-- 图标含义：消息中心 -->
+            <ImageView
+                android:id="@+id/iv_message_center"
+                android:layout_width="@dimen/icon_size_large"
+                android:layout_height="@dimen/icon_size_large"
+                android:contentDescription="消息中心"
+                android:src="@android:drawable/ic_dialog_email" />
+
+            <TextView
+                android:id="@+id/tv_message_center"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_md"
+                android:text="消息中心"
+                android:textColor="@color/text_action"
+                android:textSize="@dimen/text_size_action" />
+        </LinearLayout>
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+    <!-- 底部导航栏 (Bottom Navigation)：三个均分Tab（首页、消息、我的） -->
+    <LinearLayout
+        android:id="@+id/layout_bottom_nav"
+        android:layout_width="0dp"
+        android:layout_height="@dimen/height_bottom_nav"
+        android:background="@color/bg_card"
+        android:orientation="horizontal"
+        android:paddingTop="@dimen/space_sm"
+        android:paddingBottom="@dimen/space_sm"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent">
+
+        <LinearLayout
+            android:id="@+id/tab_home"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:orientation="vertical">
+
+            <!-- 图标含义：首页 -->
+            <ImageView
+                android:id="@+id/iv_tab_home"
+                android:layout_width="@dimen/icon_size_small"
+                android:layout_height="@dimen/icon_size_small"
+                android:contentDescription="首页"
+                android:src="@android:drawable/ic_menu_view" />
+
+            <TextView
+                android:id="@+id/tv_tab_home"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_xs"
+                android:text="首页"
+                android:textColor="@color/text_tab_active"
+                android:textSize="@dimen/text_size_tab" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/tab_message"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:orientation="vertical">
+
+            <!-- 图标含义：消息 -->
+            <ImageView
+                android:id="@+id/iv_tab_message"
+                android:layout_width="@dimen/icon_size_small"
+                android:layout_height="@dimen/icon_size_small"
+                android:contentDescription="消息"
+                android:src="@android:drawable/ic_dialog_email" />
+
+            <TextView
+                android:id="@+id/tv_tab_message"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_xs"
+                android:text="消息"
+                android:textColor="@color/text_tab_inactive"
+                android:textSize="@dimen/text_size_tab" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/tab_mine"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:orientation="vertical">
+
+            <!-- 图标含义：我的 -->
+            <ImageView
+                android:id="@+id/iv_tab_mine"
+                android:layout_width="@dimen/icon_size_small"
+                android:layout_height="@dimen/icon_size_small"
+                android:contentDescription="我的"
+                android:src="@android:drawable/ic_menu_myplaces" />
+
+            <TextView
+                android:id="@+id/tv_tab_mine"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_xs"
+                android:text="我的"
+                android:textColor="@color/text_tab_inactive"
+                android:textSize="@dimen/text_size_tab" />
+        </LinearLayout>
+    </LinearLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>
