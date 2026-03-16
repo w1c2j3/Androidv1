@@ -1,0 +1,435 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="#F5F6F8">
+
+    <!-- 顶部工具栏(Header)：左扫一扫、居中搜索框、右消息通知 -->
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/layout_header"
+        android:layout_width="match_parent"
+        android:layout_height="64dp"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:background="#FFFFFF">
+
+        <!-- 扫一扫图标（占位图，后续替换为iconfont） -->
+        <ImageView
+            android:id="@+id/iv_scan"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:contentDescription="扫一扫"
+            android:src="@android:drawable/ic_menu_camera"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent" />
+
+        <LinearLayout
+            android:id="@+id/layout_search"
+            android:layout_width="0dp"
+            android:layout_height="40dp"
+            android:layout_marginStart="12dp"
+            android:layout_marginEnd="12dp"
+            android:background="#F0F1F3"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toStartOf="@id/iv_message"
+            app:layout_constraintStart_toEndOf="@id/iv_scan"
+            app:layout_constraintTop_toTopOf="parent">
+
+            <!-- 搜索图标（占位图，后续替换为iconfont） -->
+            <ImageView
+                android:id="@+id/iv_search"
+                android:layout_width="18dp"
+                android:layout_height="18dp"
+                android:contentDescription="搜索"
+                android:src="@android:drawable/ic_menu_search" />
+
+            <TextView
+                android:id="@+id/tv_search_hint"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:text="输入手机号/运单号"
+                android:textColor="#9AA0A6"
+                android:textSize="14sp" />
+        </LinearLayout>
+
+        <!-- 消息通知图标（占位图，后续替换为iconfont） -->
+        <ImageView
+            android:id="@+id/iv_message"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:contentDescription="消息通知"
+            android:src="@android:drawable/ic_dialog_email"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toTopOf="parent" />
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+    <!-- 数据看板(Data Dashboard)：三个等宽统计项 -->
+    <LinearLayout
+        android:id="@+id/layout_data_dashboard"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="12dp"
+        android:layout_marginTop="12dp"
+        android:layout_marginEnd="12dp"
+        android:background="#FFFFFF"
+        android:orientation="horizontal"
+        android:paddingTop="16dp"
+        android:paddingBottom="16dp">
+
+        <LinearLayout
+            android:id="@+id/item_today_inbound"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/tv_today_inbound_count"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="128"
+                android:textColor="#1F2937"
+                android:textSize="24sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/tv_today_inbound"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:text="今日入库"
+                android:textColor="#6B7280"
+                android:textSize="13sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/item_today_outbound"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/tv_today_outbound_count"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="96"
+                android:textColor="#1F2937"
+                android:textSize="24sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/tv_today_outbound"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:text="今日出库"
+                android:textColor="#6B7280"
+                android:textSize="13sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/item_stagnant"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/tv_stagnant_count"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="12"
+                android:textColor="#EF4444"
+                android:textSize="24sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/tv_stagnant"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:text="滞留件"
+                android:textColor="#6B7280"
+                android:textSize="13sp" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- 核心业务区(Action Grid)：两行四列功能按钮 -->
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/layout_action_grid"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="12dp"
+        android:layout_marginTop="12dp"
+        android:layout_marginEnd="12dp"
+        android:background="#FFFFFF"
+        android:padding="12dp">
+
+        <LinearLayout
+            android:id="@+id/action_fast_inbound"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:orientation="vertical"
+            app:layout_constraintBottom_toBottomOf="@id/action_row_1"
+            app:layout_constraintEnd_toStartOf="@id/action_query"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="@id/action_row_1"
+            app:layout_constraintWidth_percent="0.25">
+
+            <!-- 快速入库图标（占位图，后续替换为iconfont） -->
+            <ImageView
+                android:id="@+id/iv_fast_inbound"
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:contentDescription="快速入库"
+                android:src="@android:drawable/ic_menu_upload" />
+
+            <TextView
+                android:id="@+id/tv_fast_inbound"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:text="快速入库"
+                android:textColor="#374151"
+                android:textSize="13sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/action_query"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:orientation="vertical"
+            app:layout_constraintBottom_toBottomOf="@id/action_row_1"
+            app:layout_constraintEnd_toStartOf="@id/action_send"
+            app:layout_constraintStart_toEndOf="@id/action_fast_inbound"
+            app:layout_constraintTop_toTopOf="@id/action_row_1"
+            app:layout_constraintWidth_percent="0.25">
+
+            <!-- 查快递图标（占位图，后续替换为iconfont） -->
+            <ImageView
+                android:id="@+id/iv_query"
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:contentDescription="查快递"
+                android:src="@android:drawable/ic_menu_search" />
+
+            <TextView
+                android:id="@+id/tv_query"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:text="查快递"
+                android:textColor="#374151"
+                android:textSize="13sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/action_send"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:orientation="vertical"
+            app:layout_constraintBottom_toBottomOf="@id/action_row_1"
+            app:layout_constraintEnd_toStartOf="@id/action_customer"
+            app:layout_constraintStart_toEndOf="@id/action_query"
+            app:layout_constraintTop_toTopOf="@id/action_row_1"
+            app:layout_constraintWidth_percent="0.25">
+
+            <!-- 寄件图标（占位图，后续替换为iconfont） -->
+            <ImageView
+                android:id="@+id/iv_send"
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:contentDescription="寄件"
+                android:src="@android:drawable/ic_menu_send" />
+
+            <TextView
+                android:id="@+id/tv_send"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:text="寄件"
+                android:textColor="#374151"
+                android:textSize="13sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/action_customer"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:orientation="vertical"
+            app:layout_constraintBottom_toBottomOf="@id/action_row_1"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toEndOf="@id/action_send"
+            app:layout_constraintTop_toTopOf="@id/action_row_1"
+            app:layout_constraintWidth_percent="0.25">
+
+            <!-- 客户管理图标（占位图，后续替换为iconfont） -->
+            <ImageView
+                android:id="@+id/iv_customer"
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:contentDescription="客户管理"
+                android:src="@android:drawable/ic_menu_myplaces" />
+
+            <TextView
+                android:id="@+id/tv_customer"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:text="客户管理"
+                android:textColor="#374151"
+                android:textSize="13sp" />
+        </LinearLayout>
+
+        <View
+            android:id="@+id/action_row_1"
+            android:layout_width="0dp"
+            android:layout_height="1dp"
+            android:visibility="invisible"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent" />
+
+        <LinearLayout
+            android:id="@+id/action_stats"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="18dp"
+            android:gravity="center"
+            android:orientation="vertical"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/action_fast_inbound"
+            app:layout_constraintWidth_percent="0.25">
+
+            <!-- 数据统计图标（占位图，后续替换为iconfont） -->
+            <ImageView
+                android:id="@+id/iv_stats"
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:contentDescription="数据统计"
+                android:src="@android:drawable/ic_menu_sort_by_size" />
+
+            <TextView
+                android:id="@+id/tv_stats"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:text="数据统计"
+                android:textColor="#374151"
+                android:textSize="13sp" />
+        </LinearLayout>
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1" />
+
+    <!-- 底部导航栏(Bottom Navigation)：首页、消息、我的 -->
+    <LinearLayout
+        android:id="@+id/layout_bottom_navigation"
+        android:layout_width="match_parent"
+        android:layout_height="64dp"
+        android:background="#FFFFFF"
+        android:orientation="horizontal"
+        android:paddingTop="6dp"
+        android:paddingBottom="6dp">
+
+        <LinearLayout
+            android:id="@+id/tab_home"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:orientation="vertical">
+
+            <!-- 首页图标（占位图，后续替换为iconfont） -->
+            <ImageView
+                android:id="@+id/iv_tab_home"
+                android:layout_width="20dp"
+                android:layout_height="20dp"
+                android:contentDescription="首页"
+                android:src="@android:drawable/ic_menu_view" />
+
+            <TextView
+                android:id="@+id/tv_tab_home"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:text="首页"
+                android:textColor="#2563EB"
+                android:textSize="12sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/tab_message"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:orientation="vertical">
+
+            <!-- 消息图标（占位图，后续替换为iconfont） -->
+            <ImageView
+                android:id="@+id/iv_tab_message"
+                android:layout_width="20dp"
+                android:layout_height="20dp"
+                android:contentDescription="消息"
+                android:src="@android:drawable/ic_dialog_email" />
+
+            <TextView
+                android:id="@+id/tv_tab_message"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:text="消息"
+                android:textColor="#6B7280"
+                android:textSize="12sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/tab_mine"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:orientation="vertical">
+
+            <!-- 我的图标（占位图，后续替换为iconfont） -->
+            <ImageView
+                android:id="@+id/iv_tab_mine"
+                android:layout_width="20dp"
+                android:layout_height="20dp"
+                android:contentDescription="我的"
+                android:src="@android:drawable/ic_menu_myplaces" />
+
+            <TextView
+                android:id="@+id/tv_tab_mine"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:text="我的"
+                android:textColor="#6B7280"
+                android:textSize="12sp" />
+        </LinearLayout>
+    </LinearLayout>
+
+</LinearLayout>
