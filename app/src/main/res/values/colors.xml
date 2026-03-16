@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="bg_page">#F5F6F8</color>
+    <color name="bg_card">#FFFFFF</color>
+    <color name="bg_search_box">#E9ECF1</color>
+
+    <color name="text_primary">#1F2329</color>
+    <color name="text_secondary">#7E8592</color>
+    <color name="text_hint">#9AA0AB</color>
+    <color name="text_action">#32363F</color>
+
+    <color name="text_tab_active">#2B6DF8</color>
+    <color name="text_tab_inactive">#8991A0</color>
+</resources>
