@@ -1,0 +1,41 @@
+# System
+.DS_Store
+Thumbs.db
+
+# Java / Maven
+target/
+*.class
+*.jar
+*.war
+*.ear
+.mvn/wrapper/maven-wrapper.jar
+
+# IntelliJ / Android Studio
+.idea/
+*.iml
+.gradle/
+build/
+local.properties
+
+# Android
+android/**/build/
+android/**/.gradle/
+android/**/local.properties
+android/**/captures/
+android/**/.externalNativeBuild/
+android/**/.cxx/
+
+# Logs
+*.log
+
+# Runtime storage
+storage/uploads/*
+storage/outputs/*
+storage/tmp/*
+!storage/uploads/.gitkeep
+!storage/outputs/.gitkeep
+!storage/tmp/.gitkeep
+
+# Env
+.env
+.env.local
