@@ -1,0 +1,40 @@
+server:
+  port: "${SERVER_PORT:8080}"
+
+spring:
+  application:
+    name: shiliu-ai-backend
+  servlet:
+    multipart:
+      max-file-size: "${SPRING_SERVLET_MULTIPART_MAX_FILE_SIZE:10MB}"
+      max-request-size: "${SPRING_SERVLET_MULTIPART_MAX_REQUEST_SIZE:12MB}"
+  datasource:
+    url: "${SPRING_DATASOURCE_URL:jdbc:h2:file:./data/shiliu-v1}"
+    driver-class-name: "${SPRING_DATASOURCE_DRIVER_CLASS_NAME:org.h2.Driver}"
+    username: "${SPRING_DATASOURCE_USERNAME:sa}"
+    password: "${SPRING_DATASOURCE_PASSWORD:}"
+  h2:
+    console:
+      enabled: "${SHILIU_H2_CONSOLE_ENABLED:false}"
+      path: /h2-console
+  jpa:
+    hibernate:
+      ddl-auto: "${SPRING_JPA_HIBERNATE_DDL_AUTO:update}"
+    open-in-view: false
+    show-sql: false
+
+shiliu:
+  public-base-url: "${SHILIU_PUBLIC_BASE_URL:http://localhost:8080}"
+  admin-token: "${SHILIU_ADMIN_TOKEN:dev-admin-token}"
+  file-storage-dir: "${SHILIU_FILE_STORAGE_DIR:./data/files}"
+  agent:
+    allowed-project-roots: "${SHILIU_AGENT_ALLOWED_PROJECT_ROOTS:/home/chase/GitHub/shiliu-ai-v1}"
+  ocr:
+    http-endpoint: "${SHILIU_OCR_HTTP_ENDPOINT:http://localhost:9000/ocr}"
+  llm:
+    enabled: "${SHILIU_LLM_ENABLED:true}"
+    api-base-url: "${SHILIU_LLM_API_BASE_URL:}"
+    api-key: "${SHILIU_LLM_API_KEY:}"
+    model: "${SHILIU_LLM_MODEL:deepseek-v3.2}"
+  feishu:
+    api-base-url: "${SHILIU_FEISHU_API_BASE_URL:https://open.feishu.cn/open-apis}"
