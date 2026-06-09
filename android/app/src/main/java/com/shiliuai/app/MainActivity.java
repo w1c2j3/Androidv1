@@ -1,96 +1,78 @@
 package com.shiliuai.app;
 
+import android.app.Activity;
 import android.content.Intent;
-import android.content.SharedPreferences;
-import android.content.res.ColorStateList;
-import android.graphics.Color;
-import android.graphics.Typeface;
-import android.graphics.drawable.GradientDrawable;
+import android.database.Cursor;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.provider.OpenableColumns;
+import android.text.InputType;
 import android.view.Gravity;
 import android.view.View;
-import android.view.Window;
+import android.view.ViewGroup;
+import android.widget.Button;
 import android.widget.EditText;
+import android.widget.HorizontalScrollView;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.ProgressBar;
 import android.widget.ScrollView;
-import android.widget.Space;
 import android.widget.TextView;
+import android.widget.Toast;
 
-import androidx.activity.result.ActivityResultLauncher;
-import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.view.WindowCompat;
-
-import com.google.android.material.button.MaterialButton;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.function.Consumer;
 
-@SuppressWarnings("deprecation")
 public class MainActivity extends AppCompatActivity {
-    private static final int BG = Color.rgb(242, 238, 229);
-    private static final int SURFACE = Color.rgb(255, 252, 246);
-    private static final int TEXT = Color.rgb(27, 34, 32);
-    private static final int MUTED = Color.rgb(99, 110, 106);
-    private static final int LINE = Color.rgb(225, 216, 201);
-    private static final int PRIMARY = Color.rgb(18, 105, 91);
-    private static final int PRIMARY_DARK = Color.rgb(28, 52, 48);
-    private static final int GREEN = Color.rgb(42, 137, 85);
-    private static final int ORANGE = Color.rgb(190, 91, 45);
-    private static final int BLUE = Color.rgb(40, 111, 150);
-    private static final int RED = Color.rgb(193, 55, 55);
+    private static final int PICK_IMAGE_REQUEST = 8101;
     private static final String DEFAULT_BACKEND_BASE_URL = BuildConfig.SHILIU_DEFAULT_BACKEND_URL;
     private static final String DEFAULT_ADMIN_TOKEN = BuildConfig.SHILIU_DEFAULT_ADMIN_TOKEN;
     private static final String DEFAULT_PROJECT_PATH = BuildConfig.SHILIU_DEFAULT_PROJECT_PATH;
-    private static final String BOT_ID = "bot_20260528_dd2222539100";
-    private static final String BOT_NAME = "test";
-    private static final String FEISHU_TOKEN = "replace-with-feishu-verification-token";
-    private static final String FEISHU_EVENT_URL = DEFAULT_BACKEND_BASE_URL + "/feishu/events/" + BOT_ID;
-    private static final String FEISHU_CARD_URL = DEFAULT_BACKEND_BASE_URL + "/feishu/card-callback/" + BOT_ID;
+    private static final String DEFAULT_BOT_ID = BuildConfig.SHILIU_DEFAULT_BOT_ID;
+    private static final String DEFAULT_BOT_NAME = BuildConfig.SHILIU_DEFAULT_BOT_NAME;
+    private static final String DEFAULT_BOT_VERIFICATION_TOKEN = BuildConfig.SHILIU_DEFAULT_BOT_VERIFICATION_TOKEN;
 
-    private final ExecutorService executor = Executors.newFixedThreadPool(4);
-    private final List<String> logs = new ArrayList<>();
-    private ActivityResultLauncher<Intent> imagePicker;
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
+    private final ExecutorService executor = Executors.newSingleThreadExecutor();
+
+    private LinearLayout root;
+    private LinearLayout navRow;
+    private LinearLayout content;
+    private TextView titleView;
+    private TextView subtitleView;
+    private TextView liveStatusView;
+    private TextView phaseView;
+    private ProgressBar topProgress;
+    private ProgressBar topSpinner;
+
     private Tab currentTab = Tab.HOME;
-    private String backendBaseUrl = DEFAULT_BACKEND_BASE_URL;
-    private String adminToken = DEFAULT_ADMIN_TOKEN;
-    private String projectPath = DEFAULT_PROJECT_PATH;
-    private String statusText = "准备就绪";
-    private JSONObject health;
-    private JSONObject readiness;
-    private JSONObject overview;
-    private JSONObject botHealth;
-    private JSONObject lastRun;
-    private JSONObject lastUpload;
-    private JSONObject lastVision;
-    private JSONArray tasks = new JSONArray();
+    private FlowPanel activeFlow;
+    private Uri pendingImageUri;
 
     private enum Tab {
-        HOME, VISION, TASKS, FEISHU, SETTINGS
+        HOME, VISION, TASKS, FEISHU, AGENT
     }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        loadSettings();
-        imagePicker = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
-            if (result.getResultCode() == RESULT_OK && result.getData() != null && result.getData().getData() != null) {
-                uploadImage(result.getData().getData());
-            }
-        });
-        Window window = getWindow();
-        window.setStatusBarColor(BG);
-        window.setNavigationBarColor(BG);
-        WindowCompat.getInsetsController(window, window.getDecorView()).setAppearanceLightStatusBars(true);
-        render(Tab.HOME);
-        refreshAll(false);
+        buildShell();
+        renderTab(Tab.HOME);
     }
 
     @Override
@@ -99,668 +81,752 @@ public class MainActivity extends AppCompatActivity {
         super.onDestroy();
     }
 
-    private void loadSettings() {
-        SharedPreferences prefs = getSharedPreferences("shiliu_ai", MODE_PRIVATE);
-        backendBaseUrl = prefs.getString("backendBaseUrl", DEFAULT_BACKEND_BASE_URL);
-        adminToken = prefs.getString("adminToken", DEFAULT_ADMIN_TOKEN);
-        projectPath = prefs.getString("projectPath", DEFAULT_PROJECT_PATH);
-    }
-
-    private void saveSettings(String baseUrl, String token, String path) {
-        backendBaseUrl = blank(baseUrl) ? DEFAULT_BACKEND_BASE_URL : baseUrl.trim();
-        adminToken = blank(token) ? DEFAULT_ADMIN_TOKEN : token.trim();
-        projectPath = blank(path) ? DEFAULT_PROJECT_PATH : path.trim();
-        getSharedPreferences("shiliu_ai", MODE_PRIVATE)
-                .edit()
-                .putString("backendBaseUrl", backendBaseUrl)
-                .putString("adminToken", adminToken)
-                .putString("projectPath", projectPath)
-                .apply();
-        statusText = "设置已保存";
-        log("settings saved");
-        render(currentTab);
-        refreshAll(false);
-    }
-
-    private ShiliuApiClient api() {
-        return new ShiliuApiClient(backendBaseUrl, adminToken);
-    }
-
-    private void render(Tab tab) {
-        currentTab = tab;
-        LinearLayout root = new LinearLayout(this);
+    private void buildShell() {
+        root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setBackgroundColor(BG);
-
-        ScrollView scroll = new ScrollView(this);
-        LinearLayout body = new LinearLayout(this);
-        body.setOrientation(LinearLayout.VERTICAL);
-        body.setPadding(dp(18), dp(18), dp(18), dp(18));
-        scroll.addView(body, new ScrollView.LayoutParams(-1, -2));
-        root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
-
-        if (tab == Tab.HOME) {
-            renderHome(body);
-        } else if (tab == Tab.VISION) {
-            renderVision(body);
-        } else if (tab == Tab.TASKS) {
-            renderTasks(body);
-        } else if (tab == Tab.FEISHU) {
-            renderFeishu(body);
-        } else {
-            renderSettings(body);
-        }
-
-        addBottomNav(root);
+        root.setBackgroundColor(color("#F5F1E8"));
         setContentView(root);
+
+        LinearLayout appBar = new LinearLayout(this);
+        appBar.setOrientation(LinearLayout.VERTICAL);
+        appBar.setPadding(dp(18), dp(16), dp(18), dp(12));
+        appBar.setBackgroundColor(color("#253241"));
+        root.addView(appBar, new LinearLayout.LayoutParams(match(), wrap()));
+
+        titleView = text("十六 AI 移动控制台", 22, "#FFFFFF", true);
+        appBar.addView(titleView);
+
+        subtitleView = text("经典 Android 工作台 · 配置已内置 · 操作全程可视化", 13, "#D6DFEA", false);
+        subtitleView.setPadding(0, dp(4), 0, dp(10));
+        appBar.addView(subtitleView);
+
+        LinearLayout liveRow = new LinearLayout(this);
+        liveRow.setOrientation(LinearLayout.HORIZONTAL);
+        liveRow.setGravity(Gravity.CENTER_VERTICAL);
+        appBar.addView(liveRow, new LinearLayout.LayoutParams(match(), wrap()));
+
+        topSpinner = new ProgressBar(this);
+        topSpinner.setIndeterminate(true);
+        topSpinner.setVisibility(View.GONE);
+        liveRow.addView(topSpinner, new LinearLayout.LayoutParams(dp(28), dp(28)));
+
+        liveStatusView = text("待命", 15, "#FFFFFF", true);
+        liveStatusView.setPadding(dp(10), 0, 0, 0);
+        liveRow.addView(liveStatusView, new LinearLayout.LayoutParams(0, wrap(), 1));
+
+        phaseView = badge("READY", "#D8F3DC", "#1B5E20");
+        liveRow.addView(phaseView);
+
+        topProgress = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
+        topProgress.setMax(100);
+        topProgress.setProgress(0);
+        LinearLayout.LayoutParams progressLp = new LinearLayout.LayoutParams(match(), dp(6));
+        progressLp.setMargins(0, dp(12), 0, 0);
+        appBar.addView(topProgress, progressLp);
+
+        HorizontalScrollView navScroll = new HorizontalScrollView(this);
+        navScroll.setHorizontalScrollBarEnabled(false);
+        navScroll.setBackgroundColor(color("#FFFDF8"));
+        root.addView(navScroll, new LinearLayout.LayoutParams(match(), wrap()));
+
+        navRow = new LinearLayout(this);
+        navRow.setOrientation(LinearLayout.HORIZONTAL);
+        navRow.setPadding(dp(10), dp(8), dp(10), dp(8));
+        navScroll.addView(navRow);
+        addNavButton("总览", Tab.HOME);
+        addNavButton("OCR", Tab.VISION);
+        addNavButton("任务", Tab.TASKS);
+        addNavButton("飞书", Tab.FEISHU);
+        addNavButton("Agent", Tab.AGENT);
+
+        ScrollView scrollView = new ScrollView(this);
+        root.addView(scrollView, new LinearLayout.LayoutParams(match(), 0, 1));
+
+        content = new LinearLayout(this);
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding(dp(14), dp(14), dp(14), dp(28));
+        scrollView.addView(content, new ScrollView.LayoutParams(match(), wrap()));
     }
 
-    private void renderHome(LinearLayout body) {
-        title(body, "视流 AI", "一个清晰入口：项目分析、截图 OCR、任务和飞书机器人");
-        body.addView(hero("内部展示版", homeSummary()), lpTop(16));
-        body.addView(statusCard(), lpTop(12));
+    private void addNavButton(String label, Tab tab) {
+        Button button = new Button(this);
+        button.setText(label);
+        button.setAllCaps(false);
+        button.setTextSize(14);
+        button.setMinHeight(dp(42));
+        button.setOnClickListener(v -> renderTab(tab));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(88), dp(44));
+        lp.setMargins(0, 0, dp(8), 0);
+        navRow.addView(button, lp);
+    }
 
-        section(body, "核心操作");
-        actionGrid(body,
-                action("分析项目", "只读扫描当前项目", PRIMARY, () -> runAgent("/plan 分析 " + projectPath + " 下一步")),
-                action("找问题", "输出风险和任务", ORANGE, () -> runAgent("/bug 找 " + projectPath + " 最严重的问题")),
-                action("上传截图", "OCR 后自动分发", BLUE, this::pickImage),
-                action("刷新状态", "后端 / OCR / 飞书", GREEN, () -> refreshAll(true))
-        );
-
-        if (lastRun != null) {
-            section(body, "最近结果");
-            body.addView(cardText(lastRun.optString("module", "AgentRun"), lastRun.optString("summary", ""), PRIMARY), lpTop(10));
+    private void renderTab(Tab tab) {
+        currentTab = tab;
+        activeFlow = null;
+        content.removeAllViews();
+        setGlobalState("待命", "READY", 0, false, "#D8F3DC", "#1B5E20");
+        if (tab == Tab.HOME) {
+            renderHome();
+        } else if (tab == Tab.VISION) {
+            renderVision();
+        } else if (tab == Tab.TASKS) {
+            renderTasks();
+        } else if (tab == Tab.FEISHU) {
+            renderFeishu();
+        } else {
+            renderAgent();
         }
     }
 
-    private void renderVision(LinearLayout body) {
-        title(body, "截图 OCR", "上传后立即返回，不再卡住等待识别完成");
-        body.addView(hero("图片到任务", visionSummary()), lpTop(16));
-        body.addView(primaryButton("选择图片并上传", v -> pickImage()), lpTop(14));
-        body.addView(secondaryButton("刷新 OCR 结果", v -> refreshVisionResult()), lpTop(10));
+    private void renderHome() {
+        content.addView(sectionTitle("系统总览"));
+        content.addView(infoCard("当前模式", "APK 已内置后端地址、管理员令牌和飞书机器人配置。手机端不展示设置页，Cloudflare URL 变化后重新打包 APK。"));
 
-        section(body, "识别结果");
-        body.addView(cardText("状态", visionStatusText(), visionColor()), lpTop(10));
-        if (!blank(visionText())) {
-            body.addView(cardText("OCR 原文", preview(visionText(), 320), BLUE), lpTop(10));
-        }
-        actionGrid(body,
-                action("保存任务", "保存候选任务", GREEN, this::saveVisionTasks),
-                action("做总结", "把 OCR 原文交给 Agent", PRIMARY, this::digestVision),
-                action("分析项目", "带 OCR 上下文", ORANGE, this::planVision),
-                action("回首页", "继续演示", BLUE, () -> render(Tab.HOME))
-        );
+        FlowPanel flow = addFlowPanel("体检进度");
+        Button check = primaryButton("立即体检后端");
+        check.setOnClickListener(v -> runHomeCheck(flow, check));
+        content.addView(check, buttonLp());
+
+        content.addView(actionGrid(new String[][]{
+                {"健康检查", "确认后端是否可达"},
+                {"队列状态", "确认 OCR/Agent 队列"},
+                {"工作台", "读取任务和识别概览"}
+        }));
+
+        runHomeCheck(flow, check);
     }
 
-    private void renderTasks(LinearLayout body) {
-        title(body, "任务", "只保留真实后端任务，不展示假数据");
-        body.addView(statusCard(), lpTop(16));
-        body.addView(primaryButton("刷新任务", v -> loadTasks()), lpTop(12));
-        section(body, "任务列表");
-        if (tasks.length() == 0) {
-            body.addView(cardText("暂无任务", "从项目分析或 OCR 结果保存任务后会出现在这里。", MUTED), lpTop(10));
+    private void renderVision() {
+        content.addView(sectionTitle("OCR 图片识别"));
+        content.addView(infoCard("操作说明", "选择手机图片后，App 会上传到后端，显示 traceId，并持续轮询处理阶段。识别完成后结果会直接显示在下方。"));
+
+        FlowPanel flow = addFlowPanel("OCR 进程");
+        Button pick = primaryButton("选择图片并开始识别");
+        pick.setOnClickListener(v -> {
+            activeFlow = flow;
+            openImagePicker();
+        });
+        content.addView(pick, buttonLp());
+
+        Button traces = secondaryButton("刷新最近 OCR 记录");
+        traces.setOnClickListener(v -> runJsonAction(flow, traces, "读取最近 OCR 记录", "GET", "/api/v1/vision/traces?limit=10", null));
+        content.addView(traces, buttonLp());
+    }
+
+    private void renderTasks() {
+        content.addView(sectionTitle("任务管理"));
+        content.addView(infoCard("反馈设计", "创建、刷新、状态更新都会进入进度条和时间线。失败时会直接显示 HTTP 错误内容，便于答辩现场定位问题。"));
+
+        EditText titleInput = input("输入任务标题，例如：整理 OCR 识别结果");
+        content.addView(titleInput);
+
+        FlowPanel flow = addFlowPanel("任务操作进度");
+        Button create = primaryButton("创建任务");
+        create.setOnClickListener(v -> createTask(flow, create, titleInput));
+        content.addView(create, buttonLp());
+
+        Button refresh = secondaryButton("刷新任务列表");
+        refresh.setOnClickListener(v -> runJsonAction(flow, refresh, "读取任务列表", "GET", "/api/v1/tasks", null));
+        content.addView(refresh, buttonLp());
+    }
+
+    private void renderFeishu() {
+        content.addView(sectionTitle("飞书机器人"));
+        content.addView(infoCard("私聊优先", "当前答辩演示建议使用私聊。群聊是否触达取决于飞书群安装、@ 事件投递和开放平台权限，不属于手机 App 页面配置。"));
+        content.addView(infoCard("已内置机器人", nonBlank(DEFAULT_BOT_NAME, "bot") + " · " + nonBlank(DEFAULT_BOT_ID, "未配置 botId")));
+
+        FlowPanel flow = addFlowPanel("机器人联通进度");
+        Button health = primaryButton("检查机器人状态");
+        health.setOnClickListener(v -> checkBotHealth(flow, health));
+        content.addView(health, buttonLp());
+
+        Button callbacks = secondaryButton("显示当前回调路径");
+        callbacks.setOnClickListener(v -> showCallbackPaths(flow, callbacks));
+        content.addView(callbacks, buttonLp());
+    }
+
+    private void renderAgent() {
+        content.addView(sectionTitle("项目 Agent"));
+        content.addView(infoCard("运行方式", "App 向后端创建 Agent run，后端负责项目扫描、任务抽取和大模型总结。App 负责显示 runId、状态轮询和最终 JSON。"));
+
+        EditText commandInput = input("输入指令，例如：/bug 找到当前项目最大的bug");
+        commandInput.setText("/bug 找到当前项目最大的bug");
+        content.addView(commandInput);
+
+        FlowPanel flow = addFlowPanel("Agent 运行进度");
+        Button run = primaryButton("运行指令");
+        run.setOnClickListener(v -> createAgentRun(flow, run, commandInput.getText().toString()));
+        content.addView(run, buttonLp());
+
+        Button summary = secondaryButton("一键项目总结");
+        summary.setOnClickListener(v -> createAgentRun(flow, summary, "总结当前项目结构、关键接口和最大风险"));
+        content.addView(summary, buttonLp());
+
+        Button list = secondaryButton("刷新运行记录");
+        list.setOnClickListener(v -> runJsonAction(flow, list, "读取 Agent 运行记录", "GET", "/api/v1/agent/runs", null));
+        content.addView(list, buttonLp());
+    }
+
+    private void runHomeCheck(FlowPanel flow, Button button) {
+        startFlow(flow, button, "开始后端体检", 5);
+        executor.execute(() -> {
+            try {
+                step(flow, "请求 /api/v1/health", 20);
+                String health = request("GET", "/api/v1/health", null);
+                step(flow, "健康检查完成", 42);
+                String readiness = request("GET", "/api/v1/setup/readiness", null);
+                step(flow, "环境就绪检查完成", 64);
+                String queues = request("GET", "/api/v1/setup/queues", null);
+                step(flow, "队列状态读取完成", 82);
+                String overview = request("GET", "/api/v1/workbench/overview", null);
+                String body = "健康检查\n" + pretty(health) + "\n\n就绪状态\n" + pretty(readiness)
+                        + "\n\n队列状态\n" + pretty(queues) + "\n\n工作台概览\n" + pretty(overview);
+                finishFlow(flow, button, "后端体检完成", body);
+            } catch (Exception e) {
+                failFlow(flow, button, "后端体检失败", e);
+            }
+        });
+    }
+
+    private void createTask(FlowPanel flow, Button button, EditText titleInput) {
+        String title = titleInput.getText().toString().trim();
+        if (title.isEmpty()) {
+            toast("请先输入任务标题");
             return;
         }
-        for (int i = 0; i < tasks.length(); i++) {
-            JSONObject task = tasks.optJSONObject(i);
-            if (task == null) {
-                continue;
+        startFlow(flow, button, "开始创建任务", 8);
+        executor.execute(() -> {
+            try {
+                JSONObject body = new JSONObject();
+                body.put("title", title);
+                body.put("source", "android_app");
+                body.put("owner", "mobile_demo");
+                step(flow, "发送任务创建请求", 45);
+                String raw = request("POST", "/api/v1/tasks", body.toString());
+                finishFlow(flow, button, "任务创建完成", pretty(raw));
+            } catch (Exception e) {
+                failFlow(flow, button, "任务创建失败", e);
             }
-            body.addView(cardText(task.optString("title", "未命名任务"),
-                    task.optString("status", "todo") + " · " + task.optString("source", "android"),
-                    "high".equals(task.optString("priority")) ? ORANGE : PRIMARY), lpTop(10));
-        }
-    }
-
-    private void renderFeishu(LinearLayout body) {
-        title(body, "飞书机器人", "固定展示配置，重点验证 /ping、图片和项目分析");
-        body.addView(hero("@" + BOT_NAME, feishuSummary()), lpTop(16));
-        body.addView(primaryButton("检测飞书后端", v -> loadBotHealth()), lpTop(14));
-        body.addView(secondaryButton("刷新全部状态", v -> refreshAll(true)), lpTop(10));
-
-        section(body, "开放平台配置");
-        body.addView(cardText("事件配置", FEISHU_EVENT_URL, PRIMARY), lpTop(10));
-        body.addView(cardText("卡片回调", FEISHU_CARD_URL, PRIMARY), lpTop(10));
-        body.addView(cardText("Verification Token", FEISHU_TOKEN + "\nEncrypt Key: 未开启", ORANGE), lpTop(10));
-
-        section(body, "群里测试");
-        body.addView(cardText("第一步", "@test /ping", GREEN), lpTop(10));
-        body.addView(cardText("项目分析", "@test /plan 分析 /home/chase/GitHub/shiliu-ai-v1 下一步", PRIMARY), lpTop(10));
-        body.addView(cardText("找问题", "@test /bug 找当前项目最严重的问题", ORANGE), lpTop(10));
-        body.addView(cardText("图片", "直接在群里发截图并 @test 整理", BLUE), lpTop(10));
-    }
-
-    private void renderSettings(LinearLayout body) {
-        title(body, "设置", "默认已经填好，通常只需要点保存并检测");
-        LinearLayout form = card();
-        label(form, "Backend URL");
-        EditText url = input(backendBaseUrl);
-        form.addView(url, new LinearLayout.LayoutParams(-1, dp(58)));
-        label(form, "Admin Token");
-        EditText token = input(adminToken);
-        form.addView(token, new LinearLayout.LayoutParams(-1, dp(58)));
-        label(form, "项目路径");
-        EditText path = input(projectPath);
-        form.addView(path, new LinearLayout.LayoutParams(-1, dp(58)));
-        body.addView(form, lpTop(16));
-        body.addView(primaryButton("保存并检测", v -> saveSettings(url.getText().toString(), token.getText().toString(), path.getText().toString())), lpTop(14));
-        body.addView(secondaryButton("恢复默认展示配置", v -> saveSettings(DEFAULT_BACKEND_BASE_URL, DEFAULT_ADMIN_TOKEN, DEFAULT_PROJECT_PATH)), lpTop(10));
-        section(body, "最近日志");
-        body.addView(logBox(), lpTop(10));
-    }
-
-    private void refreshAll(boolean show) {
-        if (show) {
-            statusText = "正在刷新状态...";
-            render(currentTab);
-        }
-        runNetwork("刷新状态", () -> {
-            JSONObject result = new JSONObject();
-            result.put("health", api().get("/api/v1/health"));
-            result.put("readiness", api().get("/api/v1/setup/readiness"));
-            result.put("overview", api().get("/api/v1/workbench/overview"));
-            result.put("tasks", api().get("/api/v1/tasks"));
-            result.put("bot", api().get("/api/v1/bots/" + BOT_ID + "/health"));
-            return result;
-        }, result -> {
-            health = result.optJSONObject("health");
-            readiness = result.optJSONObject("readiness");
-            overview = result.optJSONObject("overview");
-            botHealth = result.optJSONObject("bot");
-            JSONObject taskResponse = result.optJSONObject("tasks");
-            tasks = taskResponse == null ? new JSONArray() : taskResponse.optJSONArray("items");
-            if (tasks == null) {
-                tasks = new JSONArray();
-            }
-            statusText = "已连接";
-            render(currentTab);
         });
     }
 
-    private void loadTasks() {
-        statusText = "正在刷新任务...";
-        render(Tab.TASKS);
-        runNetwork("刷新任务", () -> api().get("/api/v1/tasks"), result -> {
-            tasks = result.optJSONArray("items");
-            if (tasks == null) {
-                tasks = new JSONArray();
-            }
-            statusText = "任务已刷新";
-            render(Tab.TASKS);
-        });
-    }
-
-    private void loadBotHealth() {
-        statusText = "正在检测飞书...";
-        render(Tab.FEISHU);
-        runNetwork("检测飞书", () -> api().get("/api/v1/bots/" + BOT_ID + "/health"), result -> {
-            botHealth = result;
-            statusText = "飞书状态已更新";
-            render(Tab.FEISHU);
-        });
-    }
-
-    private void runAgent(String command) {
-        statusText = "Agent 已提交...";
-        render(Tab.HOME);
-        JSONObject body = new JSONObject();
-        try {
-            body.put("command", command);
-            body.put("projectPath", projectPath);
-            body.put("source", "android");
-        } catch (Exception exception) {
-            statusText = exception.getMessage();
-            render(currentTab);
+    private void checkBotHealth(FlowPanel flow, Button button) {
+        if (isEmptyText(DEFAULT_BOT_ID)) {
+            toast("APK 没有内置 botId");
             return;
         }
-        runNetwork("AgentRun", () -> api().postJson("/api/v1/agent/runs", body), result -> {
-            lastRun = result;
-            statusText = "Agent 完成";
-            render(Tab.HOME);
+        runJsonAction(flow, button, "检查飞书机器人状态", "GET", "/api/v1/bots/" + DEFAULT_BOT_ID + "/health", null);
+    }
+
+    private void showCallbackPaths(FlowPanel flow, Button button) {
+        startFlow(flow, button, "生成回调路径", 25);
+        String base = cleanBaseUrl();
+        String result = "事件订阅请求地址\n" + base + "/feishu/events/" + nonBlank(DEFAULT_BOT_ID, "<botId>")
+                + "\n\n卡片回调请求地址\n" + base + "/feishu/card-callback/" + nonBlank(DEFAULT_BOT_ID, "<botId>")
+                + "\n\n说明\nCloudflare Quick Tunnel 每次重启都会变化；变化后重新运行打包脚本，安装新的 APK。";
+        finishFlow(flow, button, "回调路径已生成", result);
+    }
+
+    private void createAgentRun(FlowPanel flow, Button button, String command) {
+        String finalCommand = command == null ? "" : command.trim();
+        if (finalCommand.isEmpty()) {
+            toast("请输入指令");
+            return;
+        }
+        startFlow(flow, button, "创建 Agent run", 8);
+        executor.execute(() -> {
+            try {
+                JSONObject body = new JSONObject();
+                body.put("command", finalCommand);
+                body.put("projectPath", DEFAULT_PROJECT_PATH);
+                body.put("source", "android_app");
+                body.put("contextText", "mobile_ui_request");
+                body.put("saveTasks", false);
+                step(flow, "发送运行指令", 30);
+                String raw = request("POST", "/api/v1/agent/runs", body.toString());
+                JSONObject json = new JSONObject(raw);
+                String runId = json.optString("runId", "");
+                step(flow, runId.isEmpty() ? "运行已创建，未返回 runId" : "运行已创建：" + runId, 55);
+                if (runId.isEmpty()) {
+                    finishFlow(flow, button, "Agent 已返回", pretty(raw));
+                } else {
+                    pollAgentRun(flow, button, runId, 0);
+                }
+            } catch (Exception e) {
+                failFlow(flow, button, "Agent 运行失败", e);
+            }
         });
     }
 
-    private void pickImage() {
+    private void pollAgentRun(FlowPanel flow, Button button, String runId, int attempt) {
+        executor.execute(() -> {
+            try {
+                String raw = request("GET", "/api/v1/agent/runs/" + runId, null);
+                JSONObject json = new JSONObject(raw);
+                String status = json.optString("status", "unknown");
+                int progress = Math.min(95, 58 + attempt * 6);
+                step(flow, "轮询 Agent 状态：" + status, progress);
+                if (isTerminal(status) || attempt >= 7) {
+                    finishFlow(flow, button, "Agent 运行结束：" + status, pretty(raw));
+                } else {
+                    mainHandler.postDelayed(() -> pollAgentRun(flow, button, runId, attempt + 1), 1200);
+                }
+            } catch (Exception e) {
+                failFlow(flow, button, "Agent 轮询失败", e);
+            }
+        });
+    }
+
+    private void runJsonAction(FlowPanel flow, Button button, String label, String method, String path, @Nullable String body) {
+        startFlow(flow, button, label, 10);
+        executor.execute(() -> {
+            try {
+                step(flow, "发送请求：" + method + " " + path, 45);
+                String raw = request(method, path, body);
+                finishFlow(flow, button, label + "完成", pretty(raw));
+            } catch (Exception e) {
+                failFlow(flow, button, label + "失败", e);
+            }
+        });
+    }
+
+    private void openImagePicker() {
         Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
         intent.addCategory(Intent.CATEGORY_OPENABLE);
         intent.setType("image/*");
-        imagePicker.launch(intent);
+        startActivityForResult(intent, PICK_IMAGE_REQUEST);
     }
 
-    private void uploadImage(Uri uri) {
-        statusText = "图片上传中...";
-        render(Tab.VISION);
-        runNetwork("上传图片", () -> api().uploadImage(this, uri), upload -> {
-            lastUpload = upload;
-            lastVision = null;
-            statusText = "图片已上传，后台 OCR 中";
-            render(Tab.VISION);
-            pollVision(upload.optString("traceId"));
-        });
-    }
-
-    private void pollVision(String traceId) {
-        if (blank(traceId)) {
-            return;
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == PICK_IMAGE_REQUEST && resultCode == Activity.RESULT_OK && data != null && data.getData() != null) {
+            pendingImageUri = data.getData();
+            if (activeFlow == null) {
+                activeFlow = addFlowPanel("OCR 进程");
+            }
+            uploadImage(activeFlow, pendingImageUri);
         }
+    }
+
+    private void uploadImage(FlowPanel flow, Uri uri) {
+        startFlow(flow, null, "准备上传图片", 5);
         executor.execute(() -> {
             try {
-                for (int i = 0; i < 24; i++) {
-                    JSONObject latest = api().get("/api/v1/vision/results/" + traceId);
-                    runOnUiThread(() -> {
-                        lastVision = latest;
-                        statusText = "OCR " + latest.optString("status", "processing") + " · " + latest.optInt("progress", 0) + "%";
-                        if (currentTab == Tab.VISION) {
-                            render(Tab.VISION);
-                        }
-                    });
-                    String status = latest.optString("status");
-                    if ("done".equals(status) || "error".equals(status)) {
-                        return;
-                    }
-                    Thread.sleep(700);
+                step(flow, "读取手机图片：" + displayName(uri), 18);
+                byte[] bytes = readAll(uri);
+                step(flow, "图片读取完成，开始上传", 35);
+                String uploadRaw = uploadMultipart("/api/v1/vision/upload?source=android_app&sceneHint=auto", uri, bytes);
+                JSONObject upload = new JSONObject(uploadRaw);
+                String traceId = upload.optString("traceId", "");
+                step(flow, traceId.isEmpty() ? "上传完成，等待结果" : "上传完成：" + traceId, 55);
+                if (traceId.isEmpty()) {
+                    finishFlow(flow, null, "OCR 上传完成", pretty(uploadRaw));
+                } else {
+                    pollVision(flow, traceId, 0);
                 }
-            } catch (Exception exception) {
-                runOnUiThread(() -> {
-                    statusText = "OCR 轮询失败：" + exception.getMessage();
-                    log("OCR polling failed: " + exception.getMessage());
-                    render(currentTab);
-                });
+            } catch (Exception e) {
+                failFlow(flow, null, "OCR 上传失败", e);
             }
         });
     }
 
-    private void refreshVisionResult() {
-        String traceId = currentTraceId();
-        if (blank(traceId)) {
-            statusText = "还没有 OCR trace";
-            render(Tab.VISION);
-            return;
-        }
-        statusText = "正在刷新 OCR...";
-        render(Tab.VISION);
-        runNetwork("刷新 OCR", () -> api().get("/api/v1/vision/results/" + traceId), result -> {
-            lastVision = result;
-            statusText = "OCR 已刷新";
-            render(Tab.VISION);
-        });
-    }
-
-    private void saveVisionTasks() {
-        String traceId = currentTraceId();
-        if (blank(traceId)) {
-            statusText = "没有可保存的 OCR trace";
-            render(Tab.VISION);
-            return;
-        }
-        statusText = "正在保存任务...";
-        render(Tab.VISION);
-        runNetwork("保存 OCR 任务", () -> api().postJson("/api/v1/tasks/from-trace/" + traceId, new JSONObject()), result -> {
-            statusText = "已保存 " + result.optInt("savedCount") + " 条任务";
-            loadTasks();
-        });
-    }
-
-    private void digestVision() {
-        runVisionAgent("/digest 总结 OCR 内容");
-    }
-
-    private void planVision() {
-        runVisionAgent("/plan 基于 OCR 上下文分析 " + projectPath + " 下一步");
-    }
-
-    private void runVisionAgent(String command) {
-        String text = visionText();
-        if (blank(text)) {
-            statusText = "OCR 原文为空，暂不能分发";
-            render(Tab.VISION);
-            return;
-        }
-        statusText = "Agent 已提交...";
-        render(Tab.VISION);
-        JSONObject body = new JSONObject();
-        try {
-            body.put("command", command);
-            body.put("projectPath", projectPath);
-            body.put("source", "android_ocr");
-            body.put("traceId", currentTraceId());
-            body.put("contextText", text);
-        } catch (Exception exception) {
-            statusText = exception.getMessage();
-            render(Tab.VISION);
-            return;
-        }
-        runNetwork("OCR 分发", () -> api().postJson("/api/v1/agent/runs", body), result -> {
-            lastRun = result;
-            statusText = "Agent 完成";
-            render(Tab.HOME);
-        });
-    }
-
-    private void runNetwork(String label, NetworkJob job, Consumer<JSONObject> success) {
-        log(label + " started");
+    private void pollVision(FlowPanel flow, String traceId, int attempt) {
         executor.execute(() -> {
             try {
-                JSONObject result = job.run();
-                runOnUiThread(() -> {
-                    log(label + " ok");
-                    success.accept(result);
-                });
-            } catch (Exception exception) {
-                runOnUiThread(() -> {
-                    statusText = label + "失败：" + exception.getMessage();
-                    log(label + " failed: " + exception.getMessage());
-                    render(currentTab);
-                });
+                String raw = request("GET", "/api/v1/vision/results/" + traceId, null);
+                JSONObject json = new JSONObject(raw);
+                String status = json.optString("status", "unknown");
+                int progress = Math.min(96, 58 + attempt * 7);
+                step(flow, "OCR 状态：" + status, progress);
+                if (isTerminal(status) || attempt >= 8) {
+                    finishFlow(flow, null, "OCR 处理结束：" + status, pretty(raw));
+                } else {
+                    mainHandler.postDelayed(() -> pollVision(flow, traceId, attempt + 1), 1200);
+                }
+            } catch (Exception e) {
+                failFlow(flow, null, "OCR 轮询失败", e);
             }
         });
     }
 
-    private interface NetworkJob {
-        JSONObject run() throws Exception;
-    }
-
-    private String homeSummary() {
-        if (overview == null) {
-            return "后端地址已预置。点击刷新状态或直接开始项目分析。";
+    private String request(String method, String path, @Nullable String jsonBody) throws IOException {
+        HttpURLConnection connection = (HttpURLConnection) new URL(cleanBaseUrl() + path).openConnection();
+        connection.setConnectTimeout(7000);
+        connection.setReadTimeout(15000);
+        connection.setRequestMethod(method);
+        connection.setRequestProperty("Accept", "application/json");
+        if (!isEmptyText(DEFAULT_ADMIN_TOKEN)) {
+            connection.setRequestProperty("Authorization", "Bearer " + DEFAULT_ADMIN_TOKEN);
         }
-        return "今日识别 " + overview.optLong("todayTraceCount")
-                + " 次 · 待办 " + overview.optLong("todoTaskCount")
-                + " · 进行中 " + overview.optLong("inProgressTaskCount");
-    }
-
-    private String feishuSummary() {
-        if (botHealth == null) {
-            return "Bot ID: " + BOT_ID + "\n等待检测飞书状态。";
+        if (jsonBody != null) {
+            byte[] payload = jsonBody.getBytes(StandardCharsets.UTF_8);
+            connection.setDoOutput(true);
+            connection.setRequestProperty("Content-Type", "application/json; charset=utf-8");
+            connection.setRequestProperty("Content-Length", String.valueOf(payload.length));
+            try (OutputStream out = connection.getOutputStream()) {
+                out.write(payload);
+            }
         }
-        return "status=" + botHealth.optString("status")
-                + " · tokenValid=" + botHealth.optBoolean("tokenValid")
-                + "\neventCallbackVerified=" + botHealth.optBoolean("eventCallbackVerified")
-                + "\nlastMessage=" + botHealth.optString("lastMessageText", "-");
+        return readConnection(connection);
     }
 
-    private String visionSummary() {
-        if (lastVision != null) {
-            return "status=" + lastVision.optString("status") + " · progress=" + lastVision.optInt("progress") + "%";
+    private String uploadMultipart(String path, Uri uri, byte[] bytes) throws IOException {
+        String boundary = "----ShiliuAndroid" + System.currentTimeMillis();
+        HttpURLConnection connection = (HttpURLConnection) new URL(cleanBaseUrl() + path).openConnection();
+        connection.setConnectTimeout(7000);
+        connection.setReadTimeout(30000);
+        connection.setRequestMethod("POST");
+        connection.setRequestProperty("Accept", "application/json");
+        connection.setRequestProperty("Content-Type", "multipart/form-data; boundary=" + boundary);
+        if (!isEmptyText(DEFAULT_ADMIN_TOKEN)) {
+            connection.setRequestProperty("Authorization", "Bearer " + DEFAULT_ADMIN_TOKEN);
         }
-        if (lastUpload != null) {
-            return "traceId=" + lastUpload.optString("traceId") + "\n" + lastUpload.optString("message");
+        connection.setDoOutput(true);
+        String name = displayName(uri);
+        try (OutputStream out = connection.getOutputStream()) {
+            writeAscii(out, "--" + boundary + "\r\n");
+            writeAscii(out, "Content-Disposition: form-data; name=\"file\"; filename=\"" + safeFileName(name) + "\"\r\n");
+            writeAscii(out, "Content-Type: image/jpeg\r\n\r\n");
+            out.write(bytes);
+            writeAscii(out, "\r\n--" + boundary + "--\r\n");
         }
-        return "选择一张截图，上传后马上显示 trace，OCR 进度后台刷新。";
+        return readConnection(connection);
     }
 
-    private String visionStatusText() {
-        if (lastVision != null) {
-            return "traceId: " + lastVision.optString("traceId", currentTraceId())
-                    + "\nstatus: " + lastVision.optString("status")
-                    + " · stage: " + lastVision.optString("stage")
-                    + " · progress: " + lastVision.optInt("progress") + "%"
-                    + "\nmessage: " + lastVision.optString("message")
-                    + (blank(lastVision.optString("errorCode")) ? "" : "\nerror: " + lastVision.optString("errorCode"));
+    private String readConnection(HttpURLConnection connection) throws IOException {
+        int code = connection.getResponseCode();
+        InputStream stream = code >= 200 && code < 300 ? connection.getInputStream() : connection.getErrorStream();
+        String body = stream == null ? "" : readString(stream);
+        connection.disconnect();
+        if (code < 200 || code >= 300) {
+            throw new IOException("HTTP " + code + "\n" + body);
         }
-        if (lastUpload != null) {
-            return "traceId: " + lastUpload.optString("traceId")
-                    + "\nstatus: " + lastUpload.optString("status")
-                    + "\nmessage: " + lastUpload.optString("message");
+        return body;
+    }
+
+    private byte[] readAll(Uri uri) throws IOException {
+        try (InputStream in = getContentResolver().openInputStream(uri); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+            if (in == null) {
+                throw new IOException("无法读取图片内容");
+            }
+            byte[] buffer = new byte[8192];
+            int read;
+            while ((read = in.read(buffer)) != -1) {
+                out.write(buffer, 0, read);
+            }
+            return out.toByteArray();
         }
-        return "还没有上传图片。";
     }
 
-    private int visionColor() {
-        if (lastVision != null && "error".equals(lastVision.optString("status"))) {
-            return RED;
+    private String readString(InputStream in) throws IOException {
+        try (InputStream input = in; ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+            byte[] buffer = new byte[8192];
+            int read;
+            while ((read = input.read(buffer)) != -1) {
+                out.write(buffer, 0, read);
+            }
+            return out.toString(StandardCharsets.UTF_8.name());
         }
-        if (lastVision != null && "done".equals(lastVision.optString("status"))) {
-            return GREEN;
+    }
+
+    private void writeAscii(OutputStream out, String text) throws IOException {
+        out.write(text.getBytes(StandardCharsets.US_ASCII));
+    }
+
+    private void startFlow(FlowPanel flow, @Nullable Button button, String message, int progress) {
+        mainHandler.post(() -> {
+            activeFlow = flow;
+            flow.clear();
+            flow.result.setText("");
+            flow.add("开始", message);
+            setButtonBusy(button, true);
+            setGlobalState(message, "RUNNING", progress, true, "#FFE8A3", "#5D4600");
+        });
+    }
+
+    private void step(FlowPanel flow, String message, int progress) {
+        mainHandler.post(() -> {
+            flow.add("处理中", message);
+            setGlobalState(message, "RUNNING", progress, true, "#FFE8A3", "#5D4600");
+        });
+    }
+
+    private void finishFlow(FlowPanel flow, @Nullable Button button, String message, String result) {
+        mainHandler.post(() -> {
+            flow.add("完成", message);
+            flow.result.setText(result == null ? "" : result);
+            setButtonBusy(button, false);
+            setGlobalState(message, "DONE", 100, false, "#D8F3DC", "#1B5E20");
+        });
+    }
+
+    private void failFlow(FlowPanel flow, @Nullable Button button, String message, Exception error) {
+        mainHandler.post(() -> {
+            flow.add("失败", message);
+            flow.result.setText(error.getMessage() == null ? error.toString() : error.getMessage());
+            setButtonBusy(button, false);
+            setGlobalState(message, "ERROR", 100, false, "#FFD6D6", "#7A1B1B");
+        });
+    }
+
+    private void setGlobalState(String status, String phase, int progress, boolean busy, String bg, String fg) {
+        liveStatusView.setText(status);
+        phaseView.setText(phase);
+        phaseView.setBackgroundColor(color(bg));
+        phaseView.setTextColor(color(fg));
+        topProgress.setProgress(progress);
+        topSpinner.setVisibility(busy ? View.VISIBLE : View.GONE);
+    }
+
+    private void setButtonBusy(@Nullable Button button, boolean busy) {
+        if (button == null) {
+            return;
         }
-        return BLUE;
+        button.setEnabled(!busy);
+        button.setText(busy ? "处理中..." : button.getTag() == null ? button.getText() : String.valueOf(button.getTag()));
     }
 
-    private String visionText() {
-        JSONObject ocr = lastVision == null ? null : lastVision.optJSONObject("ocr");
-        return ocr == null ? "" : ocr.optString("plainText", "");
+    private FlowPanel addFlowPanel(String title) {
+        LinearLayout card = card();
+        card.addView(text(title, 17, "#263238", true));
+        ProgressBar progress = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
+        progress.setMax(100);
+        progress.setProgress(0);
+        LinearLayout.LayoutParams progressLp = new LinearLayout.LayoutParams(match(), dp(8));
+        progressLp.setMargins(0, dp(10), 0, dp(10));
+        card.addView(progress, progressLp);
+
+        LinearLayout timeline = new LinearLayout(this);
+        timeline.setOrientation(LinearLayout.VERTICAL);
+        card.addView(timeline);
+
+        TextView result = text("等待操作", 13, "#43505A", false);
+        result.setPadding(0, dp(12), 0, 0);
+        result.setTextIsSelectable(true);
+        card.addView(result);
+
+        content.addView(card, cardLp());
+        return new FlowPanel(progress, timeline, result);
     }
 
-    private String currentTraceId() {
-        if (lastVision != null && !blank(lastVision.optString("traceId"))) {
-            return lastVision.optString("traceId");
+    private LinearLayout actionGrid(String[][] rows) {
+        LinearLayout grid = new LinearLayout(this);
+        grid.setOrientation(LinearLayout.VERTICAL);
+        for (String[] row : rows) {
+            LinearLayout item = card();
+            item.setPadding(dp(14), dp(12), dp(14), dp(12));
+            item.addView(text(row[0], 15, "#263238", true));
+            item.addView(text(row[1], 12, "#64727D", false));
+            grid.addView(item, cardLp());
         }
-        return lastUpload == null ? "" : lastUpload.optString("traceId");
+        return grid;
     }
 
-    private View statusCard() {
-        String detail = statusText + "\n" + backendBaseUrl;
-        if (readiness != null) {
-            detail += "\nOCR=" + readiness.optBoolean("ocrHealthy") + " · Feishu=" + readiness.optString("botStatus", "unknown");
-        }
-        return cardText("连接状态", detail, readiness != null && readiness.optBoolean("backendOk") ? GREEN : ORANGE);
+    private TextView sectionTitle(String value) {
+        TextView view = text(value, 21, "#1F2A33", true);
+        view.setPadding(dp(2), dp(2), dp(2), dp(12));
+        return view;
     }
 
-    private void title(LinearLayout body, String title, String subtitle) {
-        body.addView(text(title, 30, TEXT, true));
-        body.addView(text(subtitle, 14, MUTED, false), lpTop(6));
-    }
-
-    private void section(LinearLayout body, String title) {
-        body.addView(text(title, 19, TEXT, true), lpTop(24));
-    }
-
-    private View hero(String title, String detail) {
-        LinearLayout card = new LinearLayout(this);
-        card.setOrientation(LinearLayout.VERTICAL);
-        card.setPadding(dp(22), dp(22), dp(22), dp(22));
-        GradientDrawable bg = new GradientDrawable(GradientDrawable.Orientation.TL_BR, new int[]{PRIMARY, PRIMARY_DARK});
-        bg.setCornerRadius(dp(24));
-        card.setBackground(bg);
-        card.addView(text(title, 26, Color.WHITE, true));
-        card.addView(text(detail, 15, Color.rgb(229, 241, 237), false), lpTop(8));
+    private LinearLayout infoCard(String title, String body) {
+        LinearLayout card = card();
+        card.addView(text(title, 16, "#263238", true));
+        TextView bodyView = text(body, 13, "#56636D", false);
+        bodyView.setPadding(0, dp(6), 0, 0);
+        card.addView(bodyView);
         return card;
     }
 
     private LinearLayout card() {
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
-        card.setPadding(dp(16), dp(16), dp(16), dp(16));
-        card.setBackground(round(SURFACE, LINE, 20));
-        return card;
-    }
-
-    private View cardText(String title, String detail, int color) {
-        LinearLayout card = card();
-        card.addView(text(title, 15, color, true));
-        card.addView(text(detail, 15, TEXT, false), lpTop(7));
-        return card;
-    }
-
-    private DemoAction action(String title, String detail, int color, Runnable runnable) {
-        return new DemoAction(title, detail, color, runnable);
-    }
-
-    private void actionGrid(LinearLayout body, DemoAction... actions) {
-        for (int i = 0; i < actions.length; i += 2) {
-            LinearLayout row = new LinearLayout(this);
-            row.setOrientation(LinearLayout.HORIZONTAL);
-            row.addView(actionCard(actions[i]), new LinearLayout.LayoutParams(0, dp(112), 1));
-            if (i + 1 < actions.length) {
-                row.addView(space(dp(12), 1));
-                row.addView(actionCard(actions[i + 1]), new LinearLayout.LayoutParams(0, dp(112), 1));
-            }
-            body.addView(row, lpTop(12));
-        }
-    }
-
-    private View actionCard(DemoAction action) {
-        LinearLayout card = new LinearLayout(this);
-        card.setOrientation(LinearLayout.VERTICAL);
-        card.setGravity(Gravity.CENTER_VERTICAL);
         card.setPadding(dp(16), dp(14), dp(16), dp(14));
-        card.setBackground(round(tint(action.color, 0.08f), tint(action.color, 0.22f), 22));
-        card.setClickable(true);
-        card.setOnClickListener(v -> action.runnable.run());
-        card.addView(text(action.title, 18, TEXT, true));
-        card.addView(text(action.detail, 13, MUTED, false), lpTop(6));
+        card.setBackgroundColor(color("#FFFDF8"));
         return card;
     }
 
-    private MaterialButton primaryButton(String label, View.OnClickListener listener) {
-        return button(label, PRIMARY, Color.WHITE, PRIMARY, listener);
-    }
-
-    private MaterialButton secondaryButton(String label, View.OnClickListener listener) {
-        return button(label, SURFACE, TEXT, LINE, listener);
-    }
-
-    private MaterialButton button(String label, int bg, int fg, int stroke, View.OnClickListener listener) {
-        MaterialButton button = new MaterialButton(this);
+    private Button primaryButton(String label) {
+        Button button = new Button(this);
         button.setText(label);
-        button.setTextSize(17);
-        button.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        button.setTag(label);
         button.setAllCaps(false);
-        button.setCornerRadius(dp(12));
-        button.setMinHeight(0);
-        button.setMinimumHeight(0);
-        button.setInsetTop(0);
-        button.setInsetBottom(0);
-        button.setTextColor(fg);
-        button.setPadding(dp(18), 0, dp(18), 0);
-        button.setBackgroundTintList(ColorStateList.valueOf(bg));
-        button.setStrokeColor(ColorStateList.valueOf(stroke));
-        button.setStrokeWidth(bg == SURFACE ? dp(1) : 0);
-        button.setOnClickListener(listener);
-        button.setLayoutParams(new LinearLayout.LayoutParams(-1, dp(64)));
+        button.setTextSize(16);
+        button.setTextColor(color("#FFFFFF"));
+        button.setBackgroundColor(color("#2F5D62"));
+        button.setMinHeight(dp(52));
         return button;
     }
 
-    private void addBottomNav(LinearLayout root) {
-        LinearLayout nav = new LinearLayout(this);
-        nav.setOrientation(LinearLayout.HORIZONTAL);
-        nav.setGravity(Gravity.CENTER);
-        nav.setPadding(dp(8), dp(8), dp(8), dp(8));
-        nav.setBackground(round(SURFACE, LINE, 0));
-        root.addView(nav, new LinearLayout.LayoutParams(-1, dp(78)));
-        navItem(nav, "工作台", Tab.HOME);
-        navItem(nav, "截图", Tab.VISION);
-        navItem(nav, "任务", Tab.TASKS);
-        navItem(nav, "飞书", Tab.FEISHU);
-        navItem(nav, "设置", Tab.SETTINGS);
+    private Button secondaryButton(String label) {
+        Button button = new Button(this);
+        button.setText(label);
+        button.setTag(label);
+        button.setAllCaps(false);
+        button.setTextSize(15);
+        button.setTextColor(color("#263238"));
+        button.setBackgroundColor(color("#DFE7E3"));
+        button.setMinHeight(dp(48));
+        return button;
     }
 
-    private void navItem(LinearLayout nav, String label, Tab tab) {
-        TextView item = text(label, 13, currentTab == tab ? Color.WHITE : MUTED, true);
-        item.setGravity(Gravity.CENTER);
-        item.setPadding(dp(6), 0, dp(6), 0);
-        item.setBackground(round(currentTab == tab ? PRIMARY : SURFACE, currentTab == tab ? PRIMARY : SURFACE, 18));
-        item.setOnClickListener(v -> render(tab));
-        nav.addView(item, new LinearLayout.LayoutParams(0, dp(54), 1));
+    private EditText input(String hint) {
+        EditText editText = new EditText(this);
+        editText.setHint(hint);
+        editText.setTextSize(15);
+        editText.setSingleLine(false);
+        editText.setMinLines(2);
+        editText.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
+        editText.setBackgroundColor(color("#FFFFFF"));
+        editText.setPadding(dp(12), dp(10), dp(12), dp(10));
+        return editText;
     }
 
-    private EditText input(String value) {
-        EditText input = new EditText(this);
-        input.setText(value);
-        input.setTextSize(15);
-        input.setSingleLine(true);
-        input.setTextColor(TEXT);
-        input.setPadding(dp(12), 0, dp(12), 0);
-        input.setBackground(round(Color.WHITE, LINE, 14));
-        return input;
-    }
-
-    private void label(LinearLayout parent, String value) {
-        parent.addView(text(value, 13, MUTED, true), lpTop(parent.getChildCount() == 0 ? 0 : 12));
-    }
-
-    private View logBox() {
-        TextView view = text(logs.isEmpty() ? "暂无日志" : String.join("\n", logs), 12, Color.rgb(230, 238, 235), false);
-        view.setTypeface(Typeface.MONOSPACE);
-        view.setPadding(dp(14), dp(14), dp(14), dp(14));
-        view.setBackground(round(PRIMARY_DARK, PRIMARY_DARK, 18));
+    private TextView text(String value, int sp, String color, boolean bold) {
+        TextView view = new TextView(this);
+        view.setText(value);
+        view.setTextSize(sp);
+        view.setTextColor(color(color));
+        if (bold) {
+            view.setTypeface(view.getTypeface(), android.graphics.Typeface.BOLD);
+        }
+        view.setLineSpacing(dp(2), 1.0f);
         return view;
     }
 
-    private TextView text(String value, int sp, int color, boolean bold) {
-        TextView text = new TextView(this);
-        text.setText(value == null ? "" : value);
-        text.setTextSize(sp);
-        text.setTextColor(color);
-        text.setLineSpacing(dp(2), 1f);
-        text.setIncludeFontPadding(true);
-        if (bold) {
-            text.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        }
-        return text;
+    private TextView badge(String label, String bg, String fg) {
+        TextView view = text(label, 12, fg, true);
+        view.setGravity(Gravity.CENTER);
+        view.setPadding(dp(10), dp(5), dp(10), dp(5));
+        view.setBackgroundColor(color(bg));
+        return view;
     }
 
-    private View space(int width, int height) {
-        Space space = new Space(this);
-        space.setLayoutParams(new LinearLayout.LayoutParams(width, height));
-        return space;
+    private LinearLayout.LayoutParams cardLp() {
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(match(), wrap());
+        lp.setMargins(0, 0, 0, dp(12));
+        return lp;
     }
 
-    private GradientDrawable round(int color, int stroke, int radius) {
-        GradientDrawable drawable = new GradientDrawable();
-        drawable.setColor(color);
-        drawable.setCornerRadius(dp(radius));
-        if (stroke != color) {
-            drawable.setStroke(dp(1), stroke);
-        }
-        return drawable;
+    private LinearLayout.LayoutParams buttonLp() {
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(match(), wrap());
+        lp.setMargins(0, 0, 0, dp(10));
+        return lp;
     }
 
-    private int tint(int color, float amount) {
-        int r = Color.red(color);
-        int g = Color.green(color);
-        int b = Color.blue(color);
-        return Color.rgb(
-                (int) (255 - (255 - r) * amount),
-                (int) (255 - (255 - g) * amount),
-                (int) (255 - (255 - b) * amount)
-        );
+    private int match() {
+        return ViewGroup.LayoutParams.MATCH_PARENT;
     }
 
-    private LinearLayout.LayoutParams lpTop(int top) {
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2);
-        params.topMargin = dp(top);
-        return params;
+    private int wrap() {
+        return ViewGroup.LayoutParams.WRAP_CONTENT;
     }
 
     private int dp(int value) {
-        return Math.round(value * getResources().getDisplayMetrics().density);
+        return (int) (value * getResources().getDisplayMetrics().density + 0.5f);
     }
 
-    private static boolean blank(String value) {
+    private int color(String value) {
+        return android.graphics.Color.parseColor(value);
+    }
+
+    private void toast(String message) {
+        Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
+    }
+
+    private String cleanBaseUrl() {
+        String base = isEmptyText(DEFAULT_BACKEND_BASE_URL) ? "http://10.0.2.2:8080" : DEFAULT_BACKEND_BASE_URL;
+        while (base.endsWith("/")) {
+            base = base.substring(0, base.length() - 1);
+        }
+        return base;
+    }
+
+    private String pretty(String raw) {
+        if (isEmptyText(raw)) {
+            return "";
+        }
+        try {
+            String trimmed = raw.trim();
+            if (trimmed.startsWith("[")) {
+                return new JSONArray(trimmed).toString(2);
+            }
+            if (trimmed.startsWith("{")) {
+                return new JSONObject(trimmed).toString(2);
+            }
+        } catch (Exception ignored) {
+            return raw;
+        }
+        return raw;
+    }
+
+    private boolean isTerminal(String status) {
+        if (status == null) {
+            return false;
+        }
+        String s = status.toLowerCase();
+        return s.equals("done") || s.equals("error") || s.equals("failed") || s.equals("completed") || s.equals("success");
+    }
+
+    private String displayName(Uri uri) {
+        try (Cursor cursor = getContentResolver().query(uri, null, null, null, null)) {
+            if (cursor != null && cursor.moveToFirst()) {
+                int index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME);
+                if (index >= 0) {
+                    return cursor.getString(index);
+                }
+            }
+        } catch (Exception ignored) {
+            return "image.jpg";
+        }
+        return "image.jpg";
+    }
+
+    private String safeFileName(String name) {
+        if (isEmptyText(name)) {
+            return "image.jpg";
+        }
+        return name.replace("\"", "").replace("\r", "").replace("\n", "");
+    }
+
+    private String nonBlank(String value, String fallback) {
+        return isEmptyText(value) ? fallback : value;
+    }
+
+    private boolean isEmptyText(String value) {
         return value == null || value.trim().isEmpty();
     }
 
-    private static String preview(String value, int limit) {
-        if (value == null) {
-            return "";
-        }
-        String normalized = value.replaceAll("\\s+", " ").trim();
-        if (normalized.length() <= limit) {
-            return normalized;
-        }
-        return normalized.substring(0, Math.max(0, limit - 1)) + "…";
-    }
+    private final class FlowPanel {
+        final ProgressBar progress;
+        final LinearLayout timeline;
+        final TextView result;
 
-    private void log(String message) {
-        logs.add(0, "[" + java.time.LocalTime.now().withNano(0) + "] " + message);
-        while (logs.size() > 40) {
-            logs.remove(logs.size() - 1);
+        FlowPanel(ProgressBar progress, LinearLayout timeline, TextView result) {
+            this.progress = progress;
+            this.timeline = timeline;
+            this.result = result;
         }
-    }
 
-    private static final class DemoAction {
-        final String title;
-        final String detail;
-        final int color;
-        final Runnable runnable;
+        void clear() {
+            progress.setProgress(0);
+            timeline.removeAllViews();
+        }
 
-        DemoAction(String title, String detail, int color, Runnable runnable) {
-            this.title = title;
-            this.detail = detail;
-            this.color = color;
-            this.runnable = runnable;
+        void add(String phase, String message) {
+            progress.setProgress(topProgress.getProgress());
+            LinearLayout row = new LinearLayout(MainActivity.this);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            row.setGravity(Gravity.TOP);
+            row.setPadding(0, dp(4), 0, dp(4));
+
+            TextView dot = text("●", 15, phase.equals("失败") ? "#B42318" : phase.equals("完成") ? "#1B7F3A" : "#2F5D62", true);
+            row.addView(dot, new LinearLayout.LayoutParams(dp(24), wrap()));
+
+            TextView line = text(phase + " · " + message, 13, "#3C4852", false);
+            row.addView(line, new LinearLayout.LayoutParams(0, wrap(), 1));
+            timeline.addView(row);
+            progress.setProgress(topProgress.getProgress());
         }
     }
 }
