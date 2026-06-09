@@ -1,6 +1,8 @@
 # System
 .DS_Store
 Thumbs.db
+*:Zone.Identifier
+.tmp/
 
 # Java / Maven
 target/
@@ -9,6 +11,8 @@ target/
 *.war
 *.ear
 .mvn/wrapper/maven-wrapper.jar
+backend/.mvn/apache-maven-*
+backend/.mvn/repository/
 
 # IntelliJ / Android Studio
 .idea/
@@ -18,6 +22,11 @@ build/
 local.properties
 
 # Android
+android/.android/
+android/.android-user-home/
+android/.gradle-user-home/
+android/.tmp/
+android/build/
 android/**/build/
 android/**/.gradle/
 android/**/local.properties
@@ -27,15 +36,31 @@ android/**/.cxx/
 
 # Logs
 *.log
+__pycache__/
+*.py[cod]
 
 # Runtime storage
+backend/data/
 storage/uploads/*
 storage/outputs/*
 storage/tmp/*
 !storage/uploads/.gitkeep
 !storage/outputs/.gitkeep
 !storage/tmp/.gitkeep
+ocr-service/.venv/
+ocr-service/models/
+ocr-service/.pytest_cache/
+ocr-service/.tmp/
+ocr-service/.home/
+ocr-service/.cache/
+ocr-service/.pip-cache/
+ocr-service/.uv-cache/
 
 # Env
 .env
 .env.local
+
+# Local Codex runtime config/state
+.codex/
+.memsearch/
+.push-worktree/

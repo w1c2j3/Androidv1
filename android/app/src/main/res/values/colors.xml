@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="shiliu_primary">#2563EB</color>
+    <color name="shiliu_primary_dark">#1E40AF</color>
+    <color name="shiliu_background">#F7F8FA</color>
+    <color name="shiliu_surface">#FFFFFF</color>
+    <color name="shiliu_border">#E5E7EB</color>
+    <color name="shiliu_text">#111827</color>
+    <color name="shiliu_muted">#6B7280</color>
+</resources>

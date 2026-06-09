@@ -1,0 +1,46 @@
+plugins {
+    id "com.android.application"
+}
+
+def escapeBuildConfigString = { value ->
+    (value ?: "").replace("\\", "\\\\").replace("\"", "\\\"")
+}
+def mobileBackendUrl = escapeBuildConfigString(System.getenv("SHILIU_MOBILE_BACKEND_URL") ?: "http://10.0.2.2:8080")
+def mobileAdminToken = escapeBuildConfigString(System.getenv("SHILIU_ADMIN_TOKEN") ?: "")
+def mobileProjectPath = escapeBuildConfigString(System.getenv("SHILIU_PROJECT_PATH") ?: "/home/chase/GitHub/shiliu-ai-v1")
+def mobileBotId = escapeBuildConfigString(System.getenv("SHILIU_FEISHU_BOTS_0_BOT_ID") ?: "")
+def mobileBotName = escapeBuildConfigString(System.getenv("SHILIU_FEISHU_BOTS_0_BOT_NAME") ?: "")
+def mobileBotVerificationToken = escapeBuildConfigString(System.getenv("SHILIU_FEISHU_BOTS_0_VERIFICATION_TOKEN") ?: "")
+
+android {
+    namespace "com.shiliuai.app"
+    compileSdk 35
+
+    defaultConfig {
+        applicationId "com.shiliuai.app"
+        minSdk 26
+        targetSdk 35
+        versionCode 1
+        versionName "1.0"
+        buildConfigField "String", "SHILIU_DEFAULT_BACKEND_URL", "\"${mobileBackendUrl}\""
+        buildConfigField "String", "SHILIU_DEFAULT_ADMIN_TOKEN", "\"${mobileAdminToken}\""
+        buildConfigField "String", "SHILIU_DEFAULT_PROJECT_PATH", "\"${mobileProjectPath}\""
+        buildConfigField "String", "SHILIU_DEFAULT_BOT_ID", "\"${mobileBotId}\""
+        buildConfigField "String", "SHILIU_DEFAULT_BOT_NAME", "\"${mobileBotName}\""
+        buildConfigField "String", "SHILIU_DEFAULT_BOT_VERIFICATION_TOKEN", "\"${mobileBotVerificationToken}\""
+    }
+
+    buildFeatures {
+        buildConfig true
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    implementation "androidx.appcompat:appcompat:1.7.0"
+    implementation "com.google.android.material:material:1.12.0"
+}
