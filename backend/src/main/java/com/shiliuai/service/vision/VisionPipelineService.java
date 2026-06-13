@@ -230,6 +230,8 @@ public class VisionPipelineService {
         response.summary = extractResult.summary;
         response.tasks = extractResult.tasks;
         response.links = extractResult.links;
+        response.dailyReportMaterials = extractResult.dailyReportMaterials;
+        response.riskFlags = extractResult.riskFlags;
         VisionResultResponse.OcrPreview preview = new VisionResultResponse.OcrPreview();
         preview.plainText = ocrResult.plainText;
         preview.blockCount = ocrResult.blocks == null ? 0 : ocrResult.blocks.size();

@@ -106,6 +106,7 @@ class BackendSmokeTest {
                 .andExpect(jsonPath("$.stage").value("done"))
                 .andExpect(jsonPath("$.progress").value(100))
                 .andExpect(jsonPath("$.tasks.length()").value(greaterThanOrEqualTo(1)))
+                .andExpect(jsonPath("$.dailyReportMaterials.length()").value(greaterThanOrEqualTo(1)))
                 .andExpect(jsonPath("$.ocr.blockCount").value(3))
                 .andExpect(jsonPath("$.ocr.width").value(1080))
                 .andExpect(jsonPath("$.ocr.blocks[0].id").value("b1"))
@@ -219,6 +220,22 @@ class BackendSmokeTest {
                 .andExpect(jsonPath("$.intent").value("digest"))
                 .andExpect(jsonPath("$.summary").value(org.hamcrest.Matchers.containsString("真实输入")))
                 .andExpect(jsonPath("$.tasks.length()").value(greaterThanOrEqualTo(2)));
+    }
+
+    @Test
+    void agentRunDigestRequiresRealContext() throws Exception {
+        mockMvc.perform(post("/api/v1/agent/runs")
+                        .header("Authorization", AUTH)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "command":"/digest 总结今天群消息",
+                                  "source":"android"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("needs_data_source"))
+                .andExpect(jsonPath("$.risks[0].type").value("digest_source_missing"));
     }
 
     @Test

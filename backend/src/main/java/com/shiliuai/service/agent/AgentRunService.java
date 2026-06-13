@@ -214,9 +214,16 @@ public class AgentRunService {
     private void fillDigest(AgentRunDto run, CommandRunRequest request) {
         String contextText = request == null ? "" : request.contextText;
         String inlineText = extractInlineDigestText(run.command);
+        if (!StringUtils.hasText(contextText) && !StringUtils.hasText(inlineText)) {
+            run.status = "needs_data_source";
+            run.summary = "没有真实群消息或用户粘贴文本；本次没有生成群总结。";
+            run.risks.add(new RiskFlagDto("digest_source_missing", "群总结必须读取真实飞书消息或用户提供的真实文本。"));
+            return;
+        }
         String input = StringUtils.hasText(contextText)
                 ? contextText.trim()
-                : (StringUtils.hasText(inlineText) ? inlineText : run.command);
+                : inlineText.trim();
+        List<String> lines = digestLines(input);
         String modelAnswer = llmChatService.answerText("请把下面真实输入整理成摘要、决策、任务、风险和下一步，保持简洁：\n" + input);
         if (StringUtils.hasText(modelAnswer)
                 && !modelAnswer.startsWith("我已收到消息")
@@ -224,24 +231,13 @@ public class AgentRunService {
             run.status = "done";
             run.summary = modelAnswer;
             run.nextSteps.add("基于真实输入检查摘要是否遗漏关键任务。");
+            appendDigestTasks(run, lines);
             return;
         }
-        if (!StringUtils.hasText(contextText) && !StringUtils.hasText(inlineText)) {
-            run.status = "needs_data_source";
-            run.summary = "没有真实群消息或用户粘贴文本；本次没有生成群总结。";
-            run.risks.add(new RiskFlagDto("digest_source_missing", "群总结必须读取真实飞书消息或用户提供的真实文本。"));
-            return;
-        }
-        List<String> lines = input.lines().map(String::trim).filter(StringUtils::hasText).limit(8).toList();
         run.status = "done";
         run.summary = "已基于真实输入整理 " + lines.size() + " 条文本。要点：" + String.join(" / ", lines.stream().limit(3).toList());
         run.nextSteps.add("模型不可用时已返回真实文本摘要，建议配置 LLM 获取结构化决策和风险。");
-        int index = 1;
-        for (String line : lines) {
-            if (containsAny(line, List.of("完成", "整理", "确认", "跟进", "修复", "实现"))) {
-                run.tasks.add(task("task_tmp_" + index++, line, "medium"));
-            }
-        }
+        appendDigestTasks(run, lines);
     }
 
     private void fillTaskCreate(AgentRunDto run) {
@@ -321,6 +317,26 @@ public class AgentRunService {
         task.status = "pending_confirm";
         task.confidence = 0.88;
         return task;
+    }
+
+    private static List<String> digestLines(String input) {
+        if (!StringUtils.hasText(input)) {
+            return List.of();
+        }
+        return input.lines()
+                .map(String::trim)
+                .filter(StringUtils::hasText)
+                .limit(8)
+                .toList();
+    }
+
+    private static void appendDigestTasks(AgentRunDto run, List<String> lines) {
+        int index = run.tasks.size() + 1;
+        for (String line : lines) {
+            if (containsAny(line, List.of("完成", "整理", "确认", "跟进", "修复", "实现", "测试"))) {
+                run.tasks.add(task("task_tmp_" + index++, line, "medium"));
+            }
+        }
     }
 
     private static String cleanupTaskTitle(String command) {

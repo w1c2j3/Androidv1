@@ -35,6 +35,8 @@ import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -253,13 +255,20 @@ public class MainActivity extends AppCompatActivity {
         commandInput.setText("/bug 找到当前项目最大的bug");
         content.addView(commandInput);
 
+        EditText contextInput = input("日报素材、群消息或 OCR 原文；运行 /digest 时会作为真实 contextText 发送");
+        content.addView(contextInput);
+
         FlowPanel flow = addFlowPanel("Agent 运行进度");
         Button run = primaryButton("运行指令");
-        run.setOnClickListener(v -> createAgentRun(flow, run, commandInput.getText().toString()));
+        run.setOnClickListener(v -> createAgentRun(flow, run, commandInput.getText().toString(), contextInput.getText().toString(), null));
         content.addView(run, buttonLp());
 
+        Button digest = secondaryButton("用素材生成日报/群总结");
+        digest.setOnClickListener(v -> createAgentRun(flow, digest, "/digest 总结日报素材", contextInput.getText().toString(), null));
+        content.addView(digest, buttonLp());
+
         Button summary = secondaryButton("一键项目总结");
-        summary.setOnClickListener(v -> createAgentRun(flow, summary, "总结当前项目结构、关键接口和最大风险"));
+        summary.setOnClickListener(v -> createAgentRun(flow, summary, "总结当前项目结构、关键接口和最大风险", contextInput.getText().toString(), null));
         content.addView(summary, buttonLp());
 
         Button list = secondaryButton("刷新运行记录");
@@ -327,7 +336,7 @@ public class MainActivity extends AppCompatActivity {
         finishFlow(flow, button, "回调路径已生成", result);
     }
 
-    private void createAgentRun(FlowPanel flow, Button button, String command) {
+    private void createAgentRun(FlowPanel flow, Button button, String command, @Nullable String contextText, @Nullable String traceId) {
         String finalCommand = command == null ? "" : command.trim();
         if (finalCommand.isEmpty()) {
             toast("请输入指令");
@@ -340,7 +349,12 @@ public class MainActivity extends AppCompatActivity {
                 body.put("command", finalCommand);
                 body.put("projectPath", DEFAULT_PROJECT_PATH);
                 body.put("source", "android_app");
-                body.put("contextText", "mobile_ui_request");
+                if (!isEmptyText(contextText)) {
+                    body.put("contextText", contextText.trim());
+                }
+                if (!isEmptyText(traceId)) {
+                    body.put("traceId", traceId);
+                }
                 body.put("saveTasks", false);
                 step(flow, "发送运行指令", 30);
                 String raw = request("POST", "/api/v1/agent/runs", body.toString());
@@ -368,6 +382,9 @@ public class MainActivity extends AppCompatActivity {
                 step(flow, "轮询 Agent 状态：" + status, progress);
                 if (isTerminal(status) || attempt >= 7) {
                     finishFlow(flow, button, "Agent 运行结束：" + status, pretty(raw));
+                    if ("done".equalsIgnoreCase(status) && hasArrayItems(json, "tasks")) {
+                        showAgentActions(flow, runId);
+                    }
                 } else {
                     mainHandler.postDelayed(() -> pollAgentRun(flow, button, runId, attempt + 1), 1200);
                 }
@@ -441,11 +458,132 @@ public class MainActivity extends AppCompatActivity {
                 step(flow, "OCR 状态：" + status, progress);
                 if (isTerminal(status) || attempt >= 8) {
                     finishFlow(flow, null, "OCR 处理结束：" + status, pretty(raw));
+                    if ("done".equalsIgnoreCase(status)) {
+                        showVisionActions(flow, traceId);
+                    }
                 } else {
                     mainHandler.postDelayed(() -> pollVision(flow, traceId, attempt + 1), 1200);
                 }
             } catch (Exception e) {
                 failFlow(flow, null, "OCR 轮询失败", e);
+            }
+        });
+    }
+
+    private void showVisionActions(FlowPanel flow, String traceId) {
+        mainHandler.post(() -> {
+            flow.actions.removeAllViews();
+            flow.actions.addView(text("截图分发", 15, "#263238", true));
+
+            Button saveTasks = secondaryButton("保存 OCR 任务候选");
+            saveTasks.setOnClickListener(v -> saveVisionTasks(flow, saveTasks, traceId));
+            flow.actions.addView(saveTasks, buttonLp());
+
+            Button dailyReport = secondaryButton("生成日报素材");
+            dailyReport.setOnClickListener(v -> showDailyReportMaterials(flow, dailyReport, traceId));
+            flow.actions.addView(dailyReport, buttonLp());
+
+            Button digest = secondaryButton("用 OCR 原文生成日报/群总结");
+            digest.setOnClickListener(v -> runDigestFromTrace(flow, digest, traceId));
+            flow.actions.addView(digest, buttonLp());
+        });
+    }
+
+    private void showAgentActions(FlowPanel flow, String runId) {
+        mainHandler.post(() -> {
+            flow.actions.removeAllViews();
+            flow.actions.addView(text("任务候选", 15, "#263238", true));
+
+            Button saveTasks = secondaryButton("保存 Agent 任务候选");
+            saveTasks.setOnClickListener(v -> saveAgentTasks(flow, saveTasks, runId));
+            flow.actions.addView(saveTasks, buttonLp());
+
+            Button refreshTasks = secondaryButton("刷新任务列表");
+            refreshTasks.setOnClickListener(v -> runJsonAction(flow, refreshTasks, "读取任务列表", "GET", "/api/v1/tasks", null));
+            flow.actions.addView(refreshTasks, buttonLp());
+        });
+    }
+
+    private void saveVisionTasks(FlowPanel flow, Button button, String traceId) {
+        startFlow(flow, button, "保存 OCR 任务候选", 12);
+        executor.execute(() -> {
+            try {
+                step(flow, "请求保存 trace 任务：" + traceId, 45);
+                String raw = request("POST", "/api/v1/tasks/from-trace/" + traceId, "{}");
+                JSONObject json = new JSONObject(raw);
+                finishFlow(flow, button, "已保存 " + json.optInt("savedCount", 0) + " 个任务", pretty(raw));
+                showVisionActions(flow, traceId);
+            } catch (Exception e) {
+                failFlow(flow, button, "保存 OCR 任务失败", e);
+                showVisionActions(flow, traceId);
+            }
+        });
+    }
+
+    private void saveAgentTasks(FlowPanel flow, Button button, String runId) {
+        startFlow(flow, button, "保存 Agent 任务候选", 12);
+        executor.execute(() -> {
+            try {
+                step(flow, "请求保存 run 任务：" + runId, 45);
+                String raw = request("POST", "/api/v1/agent/runs/" + runId + "/tasks", "{}");
+                JSONObject json = new JSONObject(raw);
+                finishFlow(flow, button, "已保存 " + json.optInt("savedCount", 0) + " 个任务", pretty(raw));
+                showAgentActions(flow, runId);
+            } catch (Exception e) {
+                failFlow(flow, button, "保存 Agent 任务失败", e);
+                showAgentActions(flow, runId);
+            }
+        });
+    }
+
+    private void showDailyReportMaterials(FlowPanel flow, Button button, String traceId) {
+        startFlow(flow, button, "生成日报素材", 12);
+        executor.execute(() -> {
+            try {
+                step(flow, "读取 OCR 结构化结果：" + traceId, 45);
+                String raw = request("GET", "/api/v1/vision/results/" + traceId, null);
+                String report = dailyReportText(new JSONObject(raw));
+                finishFlow(flow, button, "日报素材已生成", report);
+                showVisionActions(flow, traceId);
+            } catch (Exception e) {
+                failFlow(flow, button, "生成日报素材失败", e);
+                showVisionActions(flow, traceId);
+            }
+        });
+    }
+
+    private void runDigestFromTrace(FlowPanel flow, Button button, String traceId) {
+        startFlow(flow, button, "创建 Digest AgentRun", 10);
+        executor.execute(() -> {
+            try {
+                step(flow, "读取 OCR 原文：" + traceId, 28);
+                String resultRaw = request("GET", "/api/v1/vision/results/" + traceId, null);
+                String plainText = ocrPlainText(new JSONObject(resultRaw));
+                if (isEmptyText(plainText)) {
+                    throw new IOException("OCR 原文为空，不能生成日报/群总结");
+                }
+
+                JSONObject body = new JSONObject();
+                body.put("command", "/digest 总结 OCR 内容并生成日报素材");
+                body.put("projectPath", DEFAULT_PROJECT_PATH);
+                body.put("source", "android_app");
+                body.put("traceId", traceId);
+                body.put("contextText", plainText);
+                body.put("saveTasks", false);
+
+                step(flow, "发送 Digest 请求", 52);
+                String runRaw = request("POST", "/api/v1/agent/runs", body.toString());
+                JSONObject run = new JSONObject(runRaw);
+                String runId = run.optString("runId", "");
+                if (runId.isEmpty()) {
+                    finishFlow(flow, button, "Digest 已返回", pretty(runRaw));
+                } else {
+                    step(flow, "Digest 已创建：" + runId, 66);
+                    pollAgentRun(flow, button, runId, 0);
+                }
+            } catch (Exception e) {
+                failFlow(flow, button, "Digest 生成失败", e);
+                showVisionActions(flow, traceId);
             }
         });
     }
@@ -606,8 +744,13 @@ public class MainActivity extends AppCompatActivity {
         result.setTextIsSelectable(true);
         card.addView(result);
 
+        LinearLayout actions = new LinearLayout(this);
+        actions.setOrientation(LinearLayout.VERTICAL);
+        actions.setPadding(0, dp(12), 0, 0);
+        card.addView(actions);
+
         content.addView(card, cardLp());
-        return new FlowPanel(progress, timeline, result);
+        return new FlowPanel(progress, timeline, result, actions);
     }
 
     private LinearLayout actionGrid(String[][] rows) {
@@ -760,6 +903,92 @@ public class MainActivity extends AppCompatActivity {
         return raw;
     }
 
+    private boolean hasArrayItems(JSONObject json, String key) {
+        JSONArray array = json == null ? null : json.optJSONArray(key);
+        return array != null && array.length() > 0;
+    }
+
+    private String dailyReportText(JSONObject json) {
+        List<String> completed = new ArrayList<>();
+        JSONArray materials = json.optJSONArray("dailyReportMaterials");
+        if (materials != null) {
+            for (int i = 0; i < materials.length(); i++) {
+                String item = materials.optString(i, "").trim();
+                if (!item.isEmpty()) {
+                    completed.add(item);
+                }
+            }
+        }
+
+        if (completed.isEmpty()) {
+            JSONObject summary = json.optJSONObject("summary");
+            if (summary != null) {
+                String title = summary.optString("title", "").trim();
+                if (!title.isEmpty()) {
+                    completed.add("整理图片内容：" + title + "。");
+                }
+                JSONArray bullets = summary.optJSONArray("bullets");
+                if (bullets != null) {
+                    for (int i = 0; i < Math.min(3, bullets.length()); i++) {
+                        String bullet = bullets.optString(i, "").trim();
+                        if (!bullet.isEmpty()) {
+                            completed.add(bullet.endsWith("。") ? bullet : bullet + "。");
+                        }
+                    }
+                }
+            }
+        }
+
+        List<String> followUps = new ArrayList<>();
+        JSONArray tasks = json.optJSONArray("tasks");
+        if (tasks != null) {
+            for (int i = 0; i < Math.min(6, tasks.length()); i++) {
+                JSONObject task = tasks.optJSONObject(i);
+                if (task == null) {
+                    continue;
+                }
+                String title = task.optString("title", "").trim();
+                if (!title.isEmpty()) {
+                    String owner = task.optString("owner", "").trim();
+                    String due = task.optString("dueText", "").trim();
+                    StringBuilder line = new StringBuilder(title);
+                    if (!owner.isEmpty()) {
+                        line.append("｜负责人：").append(owner);
+                    }
+                    if (!due.isEmpty()) {
+                        line.append("｜截止：").append(due);
+                    }
+                    followUps.add(line.toString());
+                }
+            }
+        }
+
+        StringBuilder builder = new StringBuilder();
+        builder.append("今日完成\n");
+        if (completed.isEmpty()) {
+            builder.append("- 当前 OCR 结果没有生成日报素材。\n");
+        } else {
+            for (String item : completed) {
+                builder.append("- ").append(item).append('\n');
+            }
+        }
+
+        builder.append("\n待跟进\n");
+        if (followUps.isEmpty()) {
+            builder.append("- 暂无明确任务候选。\n");
+        } else {
+            for (String item : followUps) {
+                builder.append("- ").append(item).append('\n');
+            }
+        }
+        return builder.toString().trim();
+    }
+
+    private String ocrPlainText(JSONObject json) {
+        JSONObject ocr = json == null ? null : json.optJSONObject("ocr");
+        return ocr == null ? "" : ocr.optString("plainText", "");
+    }
+
     private boolean isTerminal(String status) {
         if (status == null) {
             return false;
@@ -801,16 +1030,19 @@ public class MainActivity extends AppCompatActivity {
         final ProgressBar progress;
         final LinearLayout timeline;
         final TextView result;
+        final LinearLayout actions;
 
-        FlowPanel(ProgressBar progress, LinearLayout timeline, TextView result) {
+        FlowPanel(ProgressBar progress, LinearLayout timeline, TextView result, LinearLayout actions) {
             this.progress = progress;
             this.timeline = timeline;
             this.result = result;
+            this.actions = actions;
         }
 
         void clear() {
             progress.setProgress(0);
             timeline.removeAllViews();
+            actions.removeAllViews();
         }
 
         void add(String phase, String message) {

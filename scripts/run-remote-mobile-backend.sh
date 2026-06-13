@@ -4,11 +4,23 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BACKEND_DIR="$ROOT_DIR/backend"
 TMP_DIR="$ROOT_DIR/.tmp"
+ENV_FILE="${ROOT_DIR}/.env.local"
 PORT="${SERVER_PORT:-8080}"
 ADMIN_TOKEN="${SHILIU_ADMIN_TOKEN:-}"
 ALLOWED_ROOTS="${SHILIU_AGENT_ALLOWED_PROJECT_ROOTS:-/home/chase/GitHub/shiliu-ai-v1}"
 TUNNEL_LOG="$TMP_DIR/cloudflared-mobile.log"
 CLOUDFLARED_CMD="${CLOUDFLARED_CMD:-}"
+
+if [[ -f "$ENV_FILE" ]]; then
+  set -a
+  # shellcheck disable=SC1090
+  source "$ENV_FILE"
+  set +a
+fi
+
+PORT="${SERVER_PORT:-$PORT}"
+ADMIN_TOKEN="${SHILIU_ADMIN_TOKEN:-}"
+ALLOWED_ROOTS="${SHILIU_AGENT_ALLOWED_PROJECT_ROOTS:-$ALLOWED_ROOTS}"
 
 if [[ -z "$ADMIN_TOKEN" || "$ADMIN_TOKEN" == "dev-admin-token" ]]; then
   cat >&2 <<'EOF'
@@ -98,12 +110,3 @@ export SERVER_PORT="$PORT"
 export SHILIU_PUBLIC_BASE_URL="$PUBLIC_URL"
 export SHILIU_AGENT_ALLOWED_PROJECT_ROOTS="$ALLOWED_ROOTS"
 exec ./mvnw spring-boot:run
-ENV_FILE="${ROOT_DIR}/.env.local"
-
-if [ -f "${ENV_FILE}" ]; then
-  set -a
-  # shellcheck disable=SC1090
-  . "${ENV_FILE}"
-  set +a
-fi
-
