@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <item name="tag_button_label" type="id" />
+    <item name="tag_chevron" type="id" />
+    <item name="tag_card_body" type="id" />
+    <item name="screen_host" type="id" />
+</resources>

@@ -10,7 +10,9 @@ import com.shiliuai.dto.OcrResult;
 import com.shiliuai.dto.VisionResultResponse;
 import com.shiliuai.dto.VisionTraceListResponse;
 import com.shiliuai.dto.VisionTraceSummaryDto;
+import com.shiliuai.entity.ReportMaterialEntity;
 import com.shiliuai.entity.VisionTraceEntity;
+import com.shiliuai.repository.ReportMaterialRepository;
 import com.shiliuai.repository.VisionTraceRepository;
 import com.shiliuai.service.extract.ExtractService;
 import com.shiliuai.service.storage.FileStorageService;
@@ -36,6 +38,7 @@ public class VisionPipelineService {
     private final SceneClassifier sceneClassifier;
     private final ExtractService extractService;
     private final VisionTraceRepository traceRepository;
+    private final ReportMaterialRepository reportMaterialRepository;
     private final ObjectMapper objectMapper;
     private final Clock clock;
     private final TaskExecutor visionTaskExecutor;
@@ -45,6 +48,7 @@ public class VisionPipelineService {
                                  SceneClassifier sceneClassifier,
                                  ExtractService extractService,
                                  VisionTraceRepository traceRepository,
+                                 ReportMaterialRepository reportMaterialRepository,
                                  ObjectMapper objectMapper,
                                  Clock clock,
                                  @Qualifier("visionTaskExecutor") TaskExecutor visionTaskExecutor) {
@@ -53,6 +57,7 @@ public class VisionPipelineService {
         this.sceneClassifier = sceneClassifier;
         this.extractService = extractService;
         this.traceRepository = traceRepository;
+        this.reportMaterialRepository = reportMaterialRepository;
         this.objectMapper = objectMapper;
         this.clock = clock;
         this.visionTaskExecutor = visionTaskExecutor;
@@ -116,12 +121,14 @@ public class VisionPipelineService {
             updateProcessingStage(traceId, "ocr", 45, "正在进行 OCR 识别", listener);
 
             OcrResult ocrResult = recognize(traceId, fileRef, safeSource, sceneHint);
+            normalizeOcrResult(ocrResult);
 
             updateProcessingStage(traceId, "ocr_done", 65, "OCR 已完成，正在判断图片类型", listener);
             String scene = sceneClassifier.classify(ocrResult, sceneHint);
 
             updateProcessingStage(traceId, "structuring", 80, "正在抽取摘要、任务和链接", listener);
             ExtractResult extractResult = extract(traceId, scene, ocrResult);
+            saveReportMaterials(traceId, extractResult);
 
             String ocrJson = objectMapper.writeValueAsString(ocrResult);
             String extractJson = objectMapper.writeValueAsString(extractResult);
@@ -129,6 +136,12 @@ public class VisionPipelineService {
                 trace.setScene(scene);
                 trace.setOcrJson(ocrJson);
                 trace.setExtractJson(extractJson);
+                trace.setOcrEngine(ocrResult.engine);
+                trace.setOcrConfidence(ocrResult.averageConfidence);
+                trace.setExtractMode(extractResult.extractMode);
+                trace.setLlmModel(extractResult.llmModel);
+                trace.setExtractConfidence(extractResult.extractConfidence);
+                trace.setExtractError(extractResult.extractError);
                 trace.setStatus("done");
                 trace.setStage("done");
                 trace.setProgress(100);
@@ -232,8 +245,20 @@ public class VisionPipelineService {
         response.links = extractResult.links;
         response.dailyReportMaterials = extractResult.dailyReportMaterials;
         response.riskFlags = extractResult.riskFlags;
+        response.extractMode = extractResult.extractMode;
+        response.llmModel = extractResult.llmModel;
+        response.ocrConfidence = extractResult.ocrConfidence;
+        response.extractConfidence = extractResult.extractConfidence;
+        response.extractError = extractResult.extractError;
         VisionResultResponse.OcrPreview preview = new VisionResultResponse.OcrPreview();
         preview.plainText = ocrResult.plainText;
+        preview.engine = ocrResult.engine;
+        preview.engineVersion = ocrResult.engineVersion;
+        preview.modelProfile = ocrResult.modelProfile;
+        preview.lang = ocrResult.lang;
+        preview.latencyMs = ocrResult.latencyMs;
+        preview.averageConfidence = ocrResult.averageConfidence;
+        preview.minConfidence = ocrResult.minConfidence;
         preview.blockCount = ocrResult.blocks == null ? 0 : ocrResult.blocks.size();
         preview.width = ocrResult.width;
         preview.height = ocrResult.height;
@@ -241,6 +266,46 @@ public class VisionPipelineService {
         preview.quality = ocrResult.quality == null ? java.util.Map.of() : ocrResult.quality;
         response.ocr = preview;
         return response;
+    }
+
+    /**
+     * 仅重跑结构化抽取阶段：保留持久化的 OCR JSON，重新调用 ExtractService（默认 LLM）。
+     *
+     * 修复点：以前前端用 /agent/runs + /digest 重跑 LLM，导致输入里混着上一轮的错误 JSON，
+     * LLM 把错误一起总结，输出"Codex 524"之类的误导文本。
+     * 改成专用端点后，重抽取只走 OCR 原文 → ExtractService，无任何错误上下文污染。
+     */
+    public VisionResultResponse reextract(String traceId) {
+        VisionTraceEntity trace = traceRepository.findById(traceId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "识别 trace 不存在"));
+        if (!"done".equals(trace.getStatus())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "识别尚未完成，不能重抽取");
+        }
+        OcrResult ocrResult = read(trace.getOcrJson(), OcrResult.class);
+        String scene = trace.getScene() == null ? "auto" : trace.getScene();
+        ExtractResult extractResult;
+        try {
+            extractResult = extract(traceId, scene, ocrResult);
+        } catch (RuntimeException exception) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
+                    "重抽取失败：" + safeMessage(exception), exception);
+        }
+        saveReportMaterials(traceId, extractResult);
+        try {
+            String extractJson = objectMapper.writeValueAsString(extractResult);
+            updateTrace(traceId, t -> {
+                t.setExtractJson(extractJson);
+                t.setExtractMode(extractResult.extractMode);
+                t.setLlmModel(extractResult.llmModel);
+                t.setExtractConfidence(extractResult.extractConfidence);
+                t.setExtractError(extractResult.extractError);
+                t.setStatusMessage("已重抽取");
+            });
+        } catch (JsonProcessingException exception) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
+                    "重抽取结果序列化失败", exception);
+        }
+        return getResult(traceId);
     }
 
     public ExtractResult getExtractResult(String traceId) {
@@ -282,6 +347,9 @@ public class VisionPipelineService {
         if ("done".equals(trace.getStatus()) && trace.getExtractJson() != null) {
             ExtractResult extractResult = read(trace.getExtractJson(), ExtractResult.class);
             dto.summaryTitle = extractResult.summary == null ? null : extractResult.summary.title;
+            dto.extractMode = extractResult.extractMode;
+            dto.ocrConfidence = extractResult.ocrConfidence;
+            dto.extractConfidence = extractResult.extractConfidence;
             dto.taskCount = extractResult.tasks == null ? 0 : extractResult.tasks.size();
             dto.linkCount = extractResult.links == null ? 0 : extractResult.links.size();
             dto.riskCount = extractResult.riskFlags == null ? 0 : extractResult.riskFlags.size();
@@ -334,9 +402,55 @@ public class VisionPipelineService {
         return value.substring(0, maxLength - 1) + "…";
     }
 
+    private static void normalizeOcrResult(OcrResult result) {
+        if (result == null || result.blocks == null || result.blocks.isEmpty()) {
+            return;
+        }
+        if (result.averageConfidence == null) {
+            result.averageConfidence = result.blocks.stream()
+                    .mapToDouble(block -> block.confidence)
+                    .average()
+                    .orElse(0.0);
+        }
+        if (result.minConfidence == null) {
+            result.minConfidence = result.blocks.stream()
+                    .mapToDouble(block -> block.confidence)
+                    .min()
+                    .orElse(0.0);
+        }
+    }
+
+    private void saveReportMaterials(String traceId, ExtractResult extractResult) {
+        if (extractResult == null || extractResult.dailyReportMaterials == null || extractResult.dailyReportMaterials.isEmpty()) {
+            return;
+        }
+        for (String material : extractResult.dailyReportMaterials) {
+            if (material == null || material.isBlank()) {
+                continue;
+            }
+            ReportMaterialEntity entity = new ReportMaterialEntity();
+            entity.setId(Ids.reportMaterialId(clock));
+            entity.setTraceId(traceId);
+            entity.setType("daily_report");
+            entity.setContent(material.trim());
+            entity.setCreatedAt(clock.instant());
+            reportMaterialRepository.save(entity);
+        }
+    }
+
     private <T> T read(String json, Class<T> type) {
+        if (json == null || json.isBlank()) {
+            // Trace 状态为 done 但 json 为空时不能继续 NPE，给上层返回 INTERNAL_SERVER_ERROR
+            // 比 NullPointerException 更明确，且前端能展示具体错因。
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
+                    "识别结果为空，可能是 OCR/抽取阶段未写入数据");
+        }
         try {
-            return objectMapper.readValue(json, type);
+            T value = objectMapper.readValue(json, type);
+            if (value == null) {
+                throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "识别结果反序列化为空");
+            }
+            return value;
         } catch (JsonProcessingException exception) {
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "读取识别结果失败", exception);
         }

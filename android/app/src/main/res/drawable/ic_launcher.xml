@@ -4,10 +4,20 @@
     android:height="48dp"
     android:viewportWidth="48"
     android:viewportHeight="48">
+    <!-- 底板：深黑 -->
     <path
-        android:fillColor="#2563EB"
-        android:pathData="M8,4H40V44H8Z" />
+        android:fillColor="#0A0B0E"
+        android:pathData="M0,8 L8,0 L48,0 L48,40 L40,48 L0,48 Z" />
+    <!-- 信号色斜杠 -->
     <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M15,17h18v4H15zM15,24h18v4H15zM15,31h11v4H15z" />
+        android:fillColor="#F5FF3D"
+        android:pathData="M6,38 L34,10 L38,10 L10,38 Z" />
+    <!-- 视字 简化图形 -->
+    <path
+        android:fillColor="#F5F6FA"
+        android:pathData="M14,18 H30 V20 H14 Z M14,23 H26 V25 H14 Z M14,28 H30 V30 H14 Z" />
+    <!-- 角标 -->
+    <path
+        android:fillColor="#FF2E4D"
+        android:pathData="M38,4 L44,4 L44,10 Z" />
 </vector>

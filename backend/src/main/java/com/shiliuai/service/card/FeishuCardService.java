@@ -52,7 +52,7 @@ public class FeishuCardService {
                 "template", "blue"
         ));
         List<Map<String, Object>> elements = new ArrayList<>();
-        elements.add(markdown("图片类型：" + sceneName(extractResult) + "｜置信度 " + percent(summaryConfidence(extractResult.summary))));
+        elements.add(markdown(resultMetaLine(extractResult)));
         elements.add(markdown(summaryMarkdown(extractResult.summary, 3)));
         elements.add(Map.of("tag", "hr"));
         elements.add(markdown(resultStatsMarkdown(extractResult)));
@@ -258,7 +258,24 @@ public class FeishuCardService {
     }
 
     private static String sceneName(ExtractResult extractResult) {
-        return "结构化结果";
+        return emptyAs(extractResult.scene, "结构化结果");
+    }
+
+    private static String resultMetaLine(ExtractResult extractResult) {
+        return "图片类型：" + sceneName(extractResult)
+                + "｜抽取方式：" + extractModeName(extractResult.extractMode)
+                + "｜OCR 置信度 " + percent(nullable(extractResult.ocrConfidence))
+                + "｜抽取置信度 " + percent(nullable(extractResult.extractConfidence, summaryConfidence(extractResult.summary)));
+    }
+
+    private static String extractModeName(String mode) {
+        return switch (emptyAs(mode, "unknown")) {
+            case "llm" -> "LLM";
+            case "llm_repaired" -> "LLM 修复 JSON";
+            case "rule_fallback" -> "规则兜底";
+            case "failed" -> "失败";
+            default -> "未知";
+        };
     }
 
     private static String stageName(String stage) {
@@ -277,6 +294,14 @@ public class FeishuCardService {
 
     private static double summaryConfidence(SummaryDto summary) {
         return summary == null ? 0.0 : summary.confidence;
+    }
+
+    private static double nullable(Double value) {
+        return value == null ? 0.0 : value;
+    }
+
+    private static double nullable(Double value, double fallback) {
+        return value == null ? fallback : value;
     }
 
     private static String percent(double value) {

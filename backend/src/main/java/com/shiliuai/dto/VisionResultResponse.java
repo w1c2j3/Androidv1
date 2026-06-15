@@ -13,6 +13,11 @@ public class VisionResultResponse {
     public String message;
     public String errorCode;
     public String scene;
+    public String extractMode;
+    public String llmModel;
+    public Double ocrConfidence;
+    public Double extractConfidence;
+    public String extractError;
     public SummaryDto summary;
     public List<TaskCandidateDto> tasks = new ArrayList<>();
     public List<LinkCandidateDto> links = new ArrayList<>();
@@ -22,6 +27,13 @@ public class VisionResultResponse {
 
     public static class OcrPreview {
         public String plainText;
+        public String engine;
+        public String engineVersion;
+        public String modelProfile;
+        public String lang;
+        public Long latencyMs;
+        public Double averageConfidence;
+        public Double minConfidence;
         public int blockCount;
         public int width;
         public int height;

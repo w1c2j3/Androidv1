@@ -84,6 +84,7 @@ public class RuleBasedExtractService implements ExtractService {
             task.dueText = firstMatch(line, TIME_WORDS);
             task.dueAt = null;
             task.priority = containsAny(line, HIGH_PRIORITY_WORDS) || task.dueText != null ? "high" : "medium";
+            task.evidence = line;
             task.sourceBlockIds = sourceBlockIds(line, request);
             task.confidence = 0.87;
             task.status = "pending_confirm";

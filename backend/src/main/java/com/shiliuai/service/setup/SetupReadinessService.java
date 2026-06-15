@@ -6,6 +6,7 @@ import com.shiliuai.dto.SetupReadinessResponse;
 import com.shiliuai.entity.BotConfigEntity;
 import com.shiliuai.repository.BotConfigRepository;
 import com.shiliuai.service.bot.BotConfigService;
+import com.shiliuai.service.llm.LlmChatService;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -19,14 +20,17 @@ public class SetupReadinessService {
     private final ShiliuProperties properties;
     private final BotConfigRepository botConfigRepository;
     private final BotConfigService botConfigService;
+    private final LlmChatService llmChatService;
     private final RestClient restClient;
 
     public SetupReadinessService(ShiliuProperties properties,
                                  BotConfigRepository botConfigRepository,
-                                 BotConfigService botConfigService) {
+                                 BotConfigService botConfigService,
+                                 LlmChatService llmChatService) {
         this.properties = properties;
         this.botConfigRepository = botConfigRepository;
         this.botConfigService = botConfigService;
+        this.llmChatService = llmChatService;
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(Duration.ofMillis(800));
         factory.setReadTimeout(Duration.ofMillis(800));
@@ -39,6 +43,11 @@ public class SetupReadinessService {
         response.ocrEndpoint = properties.getOcr().getHttpEndpoint();
         response.ocrConfigured = StringUtils.hasText(response.ocrEndpoint);
         response.ocrHealthy = response.ocrConfigured && isOcrHealthy(response.ocrEndpoint);
+        response.llmConfigured = llmChatService.isAvailable();
+        // 真实心跳：实际打一次 chat/completions，而不是仅看是否配置了 baseUrl + apiKey。
+        // 这样 next-token.cc 临时挂掉时 Android 总览页才能正确显示 LLM 为红色。
+        response.llmHealthy = response.llmConfigured && llmChatService.ping();
+        response.llmModel = llmChatService.modelName();
 
         botConfigRepository.findFirstByOrderByCreatedAtDesc().ifPresent(bot -> fillBotStatus(response, bot));
 

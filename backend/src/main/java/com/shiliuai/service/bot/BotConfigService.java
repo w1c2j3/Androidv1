@@ -89,7 +89,7 @@ public class BotConfigService {
             response.status = "error";
             response.nextStep = "请检查飞书 App ID、App Secret 和应用可用状态。";
         } else {
-            response.status = response.eventCallbackVerified ? "ready" : "waiting_event";
+            response.status = response.eventCallbackVerified ? "ok" : "waiting_event";
             response.nextStep = response.eventCallbackVerified
                     ? "请在飞书群里发送一张截图并 @视流助手 整理。"
                     : "请在飞书测试群发送：@视流助手 /ping。";

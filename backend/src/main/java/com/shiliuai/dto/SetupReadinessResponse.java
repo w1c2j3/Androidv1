@@ -5,6 +5,9 @@ public class SetupReadinessResponse {
     public boolean ocrConfigured;
     public boolean ocrHealthy;
     public String ocrEndpoint;
+    public boolean llmConfigured;
+    public boolean llmHealthy;
+    public String llmModel;
     public boolean botRegistered;
     public String botId;
     public String botStatus;

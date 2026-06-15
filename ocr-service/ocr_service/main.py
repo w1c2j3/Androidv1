@@ -47,6 +47,8 @@ def health() -> dict[str, Any]:
         "status": "ok",
         "service": "shiliu-ocr-service",
         "version": __version__,
+        "engine": settings.engine,
+        "localModel": True,
         "modelProfile": settings.model_profile,
         "lang": settings.lang,
     }
@@ -61,25 +63,29 @@ async def recognize(
 ) -> dict[str, Any]:
     parsed_hints = parse_hints(hints)
     suffix = safe_suffix(file.filename)
-    with tempfile.NamedTemporaryFile(prefix="shiliu_ocr_", suffix=suffix, delete=False) as tmp:
-        path = Path(tmp.name)
-        total = 0
-        while True:
-            chunk = await file.read(1024 * 1024)
-            if not chunk:
-                break
-            total += len(chunk)
-            if total > settings.max_file_bytes:
-                path.unlink(missing_ok=True)
-                raise HTTPException(status_code=413, detail="图片超过 OCR 服务大小限制")
-            tmp.write(chunk)
-
+    # 把上传分片读取也放进 try/finally 内，避免客户端断开或读异常时遗留临时文件。
+    tmp = tempfile.NamedTemporaryFile(prefix="shiliu_ocr_", suffix=suffix, delete=False)
+    path = Path(tmp.name)
     try:
-        result = get_engine().recognize(path, trace_id=traceId, source=source, hints=parsed_hints)
-        return result.to_dict()
-    except HTTPException:
-        raise
-    except Exception as exception:
-        raise HTTPException(status_code=500, detail=str(exception)) from exception
+        try:
+            total = 0
+            while True:
+                chunk = await file.read(1024 * 1024)
+                if not chunk:
+                    break
+                total += len(chunk)
+                if total > settings.max_file_bytes:
+                    raise HTTPException(status_code=413, detail="图片超过 OCR 服务大小限制")
+                tmp.write(chunk)
+        finally:
+            tmp.close()
+
+        try:
+            result = get_engine().recognize(path, trace_id=traceId, source=source, hints=parsed_hints)
+            return result.to_dict()
+        except HTTPException:
+            raise
+        except Exception as exception:
+            raise HTTPException(status_code=500, detail=str(exception)) from exception
     finally:
         path.unlink(missing_ok=True)

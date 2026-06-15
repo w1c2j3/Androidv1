@@ -1,6 +1,9 @@
 package com.shiliuai.service.workbench;
 
+import com.shiliuai.dto.FeishuCardActionLogDto;
 import com.shiliuai.dto.WorkbenchOverviewResponse;
+import com.shiliuai.entity.FeishuCardActionLogEntity;
+import com.shiliuai.repository.FeishuCardActionLogRepository;
 import com.shiliuai.repository.TaskItemRepository;
 import com.shiliuai.repository.VisionTraceRepository;
 import com.shiliuai.service.vision.VisionPipelineService;
@@ -15,15 +18,18 @@ import java.time.LocalDate;
 public class WorkbenchService {
     private final VisionTraceRepository visionTraceRepository;
     private final TaskItemRepository taskItemRepository;
+    private final FeishuCardActionLogRepository actionLogRepository;
     private final VisionPipelineService visionPipelineService;
     private final Clock clock;
 
     public WorkbenchService(VisionTraceRepository visionTraceRepository,
                             TaskItemRepository taskItemRepository,
+                            FeishuCardActionLogRepository actionLogRepository,
                             VisionPipelineService visionPipelineService,
                             Clock clock) {
         this.visionTraceRepository = visionTraceRepository;
         this.taskItemRepository = taskItemRepository;
+        this.actionLogRepository = actionLogRepository;
         this.visionPipelineService = visionPipelineService;
         this.clock = clock;
     }
@@ -41,6 +47,27 @@ public class WorkbenchService {
         response.ignoredTaskCount = taskItemRepository.countByStatus("ignored");
         response.todayCreatedTaskCount = taskItemRepository.countByCreatedAtAfter(startOfDay);
         response.recentTraces = visionPipelineService.listTraces(8).items;
+        response.recentCardActions = actionLogRepository.findTop8ByOrderByCreatedAtDesc()
+                .stream()
+                .map(this::toDto)
+                .toList();
         return response;
+    }
+
+    private FeishuCardActionLogDto toDto(FeishuCardActionLogEntity entity) {
+        FeishuCardActionLogDto dto = new FeishuCardActionLogDto();
+        dto.id = entity.getId();
+        dto.botId = entity.getBotId();
+        dto.traceId = entity.getTraceId();
+        dto.action = entity.getAction();
+        dto.status = normalizeCardActionStatus(entity.getStatus());
+        dto.errorCode = entity.getErrorCode();
+        dto.errorMessage = entity.getErrorMessage();
+        dto.createdAt = entity.getCreatedAt() == null ? null : entity.getCreatedAt().toString();
+        return dto;
+    }
+
+    private static String normalizeCardActionStatus(String status) {
+        return "success".equals(status) ? "ok" : status;
     }
 }

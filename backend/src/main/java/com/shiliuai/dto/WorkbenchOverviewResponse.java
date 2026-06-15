@@ -13,4 +13,5 @@ public class WorkbenchOverviewResponse {
     public long ignoredTaskCount;
     public long todayCreatedTaskCount;
     public List<VisionTraceSummaryDto> recentTraces = new ArrayList<>();
+    public List<FeishuCardActionLogDto> recentCardActions = new ArrayList<>();
 }

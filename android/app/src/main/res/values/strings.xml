@@ -1,4 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">视流 AI</string>
+
+    <!-- 标签栏 -->
+    <string name="tab_home">总览</string>
+    <string name="tab_vision">识图</string>
+    <string name="tab_tasks">任务</string>
+    <string name="tab_papers">论文</string>
+    <string name="tab_feishu">飞书</string>
+
+    <!-- 通用 -->
+    <string name="phase_ready">待命</string>
+    <string name="phase_running">运行中</string>
+    <string name="phase_done">完成</string>
+    <string name="phase_error">异常</string>
 </resources>

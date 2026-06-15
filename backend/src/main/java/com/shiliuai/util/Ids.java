@@ -37,6 +37,14 @@ public final class Ids {
         return "mem_" + DAY.format(clock.instant()) + "_" + shortUuid();
     }
 
+    public static String cardActionLogId(Clock clock) {
+        return "card_action_" + DAY.format(clock.instant()) + "_" + shortUuid();
+    }
+
+    public static String reportMaterialId(Clock clock) {
+        return "report_" + DAY.format(clock.instant()) + "_" + shortUuid();
+    }
+
     private static String shortUuid() {
         return UUID.randomUUID().toString().replace("-", "").substring(0, 12);
     }

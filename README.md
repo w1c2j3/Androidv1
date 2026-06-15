@@ -7,7 +7,7 @@ This repo now keeps real runtime secrets out of tracked files. Local runs read `
 1. Start the backend/tunnel only when you are ready to test:
 
 ```bash
-./scripts/run-remote-mobile-backend.sh
+./scripts/start-phone-demo-stack.sh
 ```
 
 2. Copy the new Cloudflare Quick Tunnel URL printed by the script into Feishu Open Platform:
@@ -87,13 +87,13 @@ android/app/build/outputs/apk/debug/app-debug.apk
 模拟器默认后端地址可用：
 
 ```text
-http://10.0.2.2:8080
+http://10.0.2.2:8000
 ```
 
 真机需要在设置页改成电脑局域网 IP，例如：
 
 ```text
-http://192.168.1.23:8080
+http://192.168.1.23:8000
 ```
 
 本地开发默认 Admin Token：
@@ -108,7 +108,7 @@ dev-admin-token
 
 ```bash
 export SHILIU_ADMIN_TOKEN="$(openssl rand -hex 24)"
-./scripts/run-remote-mobile-backend.sh
+./scripts/start-phone-demo-stack.sh
 ```
 
 脚本会输出 Android 设置页需要填写的：
@@ -150,7 +150,7 @@ cd backend
 健康检查：
 
 ```bash
-curl http://localhost:8080/api/v1/health
+curl http://localhost:8000/api/v1/health
 ```
 
 需要鉴权的接口添加：

@@ -4,6 +4,8 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.shiliuai.dto.AgentRunDto;
+import com.shiliuai.dto.CodexRunRequest;
+import com.shiliuai.dto.CodexRunResponse;
 import com.shiliuai.dto.CommandRunRequest;
 import com.shiliuai.dto.PaperDto;
 import com.shiliuai.dto.RiskFlagDto;
@@ -11,6 +13,7 @@ import com.shiliuai.dto.TaskCandidateDto;
 import com.shiliuai.entity.BotConfigEntity;
 import com.shiliuai.service.agent.AgentRunService;
 import com.shiliuai.service.bot.BotConfigService;
+import com.shiliuai.service.codex.CodexService;
 import com.shiliuai.service.llm.LlmChatService;
 import com.shiliuai.service.task.TaskService;
 import com.shiliuai.dto.TaskDto;
@@ -36,6 +39,7 @@ public class FeishuEventService {
     private final AgentRunService agentRunService;
     private final LlmChatService llmChatService;
     private final TaskService taskService;
+    private final CodexService codexService;
     private final TaskExecutor feishuEventTaskExecutor;
     private final ObjectMapper objectMapper;
 
@@ -45,6 +49,7 @@ public class FeishuEventService {
                               AgentRunService agentRunService,
                               LlmChatService llmChatService,
                               TaskService taskService,
+                              CodexService codexService,
                               @Qualifier("feishuEventTaskExecutor") TaskExecutor feishuEventTaskExecutor,
                               ObjectMapper objectMapper) {
         this.botConfigService = botConfigService;
@@ -53,6 +58,7 @@ public class FeishuEventService {
         this.agentRunService = agentRunService;
         this.llmChatService = llmChatService;
         this.taskService = taskService;
+        this.codexService = codexService;
         this.feishuEventTaskExecutor = feishuEventTaskExecutor;
         this.objectMapper = objectMapper;
     }
@@ -152,8 +158,46 @@ public class FeishuEventService {
         try {
             feishuEventTaskExecutor.execute(() -> {
                 String normalized = normalizeText(text);
+                if (isCodexCommand(normalized)) {
+                    // 1) 立刻回占位
+                    boolean writeMode = normalized.startsWith("/codex!") || normalized.contains("/codex!");
+                    String prompt = stripCodexPrefix(normalized);
+                    if (!StringUtils.hasText(prompt)) {
+                        replyTextSafely(bot, chatId, "用法：\n  /codex <你要交给 codex 的指令>\n  /codex! <允许写文件的指令>（慎用）");
+                        return;
+                    }
+                    CodexRunRequest request = new CodexRunRequest();
+                    request.prompt = prompt;
+                    request.sandbox = writeMode ? "workspace-write" : "read-only";
+                    request.source = "feishu";
+                    try {
+                        CodexRunResponse placeholder = codexService.submitAsync(request);
+                        replyTextSafely(bot, chatId, formatCodexPlaceholderReply(placeholder, writeMode));
+                        // 2) 后台 poll 完成后发第二条
+                        watchCodexThenReply(bot, chatId, placeholder.runId, writeMode);
+                    } catch (RuntimeException exception) {
+                        LOGGER.warn("Feishu codex submit failed", exception);
+                        replyTextSafely(bot, chatId, "Codex 调用失败：" + exception.getMessage());
+                    }
+                    return;
+                }
                 if (isAgentCommand(normalized)) {
-                    replyTextSafely(bot, chatId, runAgentCommandSafely(bot, chatId, normalized));
+                    // Agent 路径同样改异步：先回 runId，完成后再发最终结果。
+                    try {
+                        CommandRunRequest request = new CommandRunRequest();
+                        request.command = normalized;
+                        request.source = "feishu_text";
+                        request.chatId = chatId;
+                        if (isDigestCommand(normalized)) {
+                            request.contextText = recentChatText(bot, chatId);
+                        }
+                        AgentRunDto placeholder = agentRunService.submitAsync(request);
+                        replyTextSafely(bot, chatId, formatAgentPlaceholderReply(placeholder));
+                        watchAgentThenReply(bot, chatId, placeholder.runId);
+                    } catch (RuntimeException exception) {
+                        LOGGER.warn("Feishu agent submit failed", exception);
+                        replyTextSafely(bot, chatId, "命令已收到，但 AgentRun 创建失败：" + exception.getMessage());
+                    }
                     return;
                 }
                 String taskTitle = extractTaskTitle(text);
@@ -170,21 +214,126 @@ public class FeishuEventService {
         }
     }
 
-    private String runAgentCommandSafely(BotConfigEntity bot, String chatId, String text) {
-        try {
-            CommandRunRequest request = new CommandRunRequest();
-            request.command = text;
-            request.source = "feishu_text";
-            request.chatId = chatId;
-            if (isDigestCommand(text)) {
-                request.contextText = recentChatText(bot, chatId);
+    /**
+     * 真实调用 Codex：从消息中提取 `/codex` 之后的 prompt，真实运行 codex exec。
+     * 默认 read-only sandbox，避免飞书远程触发误改文件；
+     * 如需写入显式写 `/codex! ...` 触发 workspace-write。
+     *
+     * 飞书路径直接走 submitAsync 在 handleTextAsync 中处理，避免 codex 长任务把
+     * feishuEventTaskExecutor 拖死或被 Cloudflare 100s 响应窗口截断。
+     */
+
+    private static String formatCodexPlaceholderReply(CodexRunResponse placeholder, boolean writeMode) {
+        StringBuilder b = new StringBuilder();
+        b.append("Codex · 已入队");
+        if (writeMode) b.append("（workspace-write）");
+        b.append("\n运行编号：").append(placeholder.runId);
+        b.append("\n状态：").append(placeholder.status);
+        b.append("\n\n命令已派发，完成后会再发一条结果。如长时间无回应，请在 Android 工作台查询 runId。");
+        return truncate(b.toString(), 800);
+    }
+
+    private static String formatAgentPlaceholderReply(AgentRunDto placeholder) {
+        StringBuilder b = new StringBuilder();
+        b.append("AgentRun · 已入队\n");
+        b.append("运行编号：").append(placeholder.runId).append('\n');
+        b.append("状态：").append(emptyAs(placeholder.status, "unknown")).append('\n');
+        b.append('\n').append(emptyAs(placeholder.summary, "命令已派发，完成后会再发一条结果。"));
+        return truncate(b.toString(), 800);
+    }
+
+    /**
+     * 后台轮询 codexService.fetchRun(runId) 直到状态终止，然后发第二条回复。
+     * 不复用 feishuEventTaskExecutor，避免占用前台事件队列。
+     */
+    private void watchCodexThenReply(BotConfigEntity bot, String chatId, String runId, boolean writeMode) {
+        Thread t = new Thread(() -> {
+            long deadline = System.currentTimeMillis() + 30L * 60_000L; // 30 分钟最长等待
+            while (System.currentTimeMillis() < deadline) {
+                try {
+                    Thread.sleep(2_000L);
+                    CodexRunResponse latest = codexService.fetchRun(runId);
+                    if (latest != null && latest.status != null && isTerminalStatus(latest.status)) {
+                        replyTextSafely(bot, chatId, formatCodexReply(latest, writeMode));
+                        return;
+                    }
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    return;
+                } catch (RuntimeException ignored) {
+                    // 缓存过期 / NOT_FOUND 视为终止失败
+                    replyTextSafely(bot, chatId, "Codex runId=" + runId + " 状态已丢失，请稍后重试。");
+                    return;
+                }
             }
-            AgentRunDto run = agentRunService.createRun(request);
-            return formatAgentRunReply(run);
-        } catch (RuntimeException exception) {
-            LOGGER.warn("Failed to run Feishu AgentRun command", exception);
-            return "命令已收到，但 AgentRun 创建失败：" + exception.getMessage();
+            replyTextSafely(bot, chatId, "Codex runId=" + runId + " 超过 30 分钟仍未完成，已停止跟踪。");
+        }, "feishu-codex-watch-" + runId);
+        t.setDaemon(true);
+        t.start();
+    }
+
+    private void watchAgentThenReply(BotConfigEntity bot, String chatId, String runId) {
+        Thread t = new Thread(() -> {
+            long deadline = System.currentTimeMillis() + 10L * 60_000L; // 10 分钟最长
+            while (System.currentTimeMillis() < deadline) {
+                try {
+                    Thread.sleep(1_500L);
+                    AgentRunDto latest = agentRunService.getRun(runId);
+                    if (latest != null && latest.status != null && isTerminalStatus(latest.status)) {
+                        replyTextSafely(bot, chatId, formatAgentRunReply(latest));
+                        return;
+                    }
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    return;
+                } catch (RuntimeException ignored) {
+                    replyTextSafely(bot, chatId, "AgentRun runId=" + runId + " 状态已丢失，请稍后重试。");
+                    return;
+                }
+            }
+            replyTextSafely(bot, chatId, "AgentRun runId=" + runId + " 超过 10 分钟仍未完成，已停止跟踪。");
+        }, "feishu-agent-watch-" + runId);
+        t.setDaemon(true);
+        t.start();
+    }
+
+    private static boolean isTerminalStatus(String status) {
+        // 与 Android Json.isTerminal 保持一致
+        String s = status.toLowerCase();
+        return s.equals("done") || s.equals("error") || s.equals("failed")
+                || s.equals("timeout") || s.equals("disabled")
+                || s.equals("no_results") || s.equals("data_source_error") || s.equals("needs_data_source")
+                || s.equals("completed") || s.equals("success");
+    }
+
+    private static String stripCodexPrefix(String text) {
+        if (text == null) return "";
+        String trimmed = text.trim();
+        // 去掉 @bot 之后剩余部分里的 /codex 前缀
+        int idx = trimmed.indexOf("/codex");
+        if (idx < 0) return trimmed;
+        String rest = trimmed.substring(idx + "/codex".length());
+        if (rest.startsWith("!")) rest = rest.substring(1);
+        return rest.replaceFirst("^[，,。:：；;\\s]+", "").trim();
+    }
+
+    private static boolean isCodexCommand(String text) {
+        return StringUtils.hasText(text) && text.contains("/codex");
+    }
+
+    private static String formatCodexReply(CodexRunResponse response, boolean writeMode) {
+        StringBuilder b = new StringBuilder();
+        b.append("Codex · ").append(response.status == null ? "unknown" : response.status);
+        if (writeMode) b.append("（workspace-write）");
+        b.append("\n运行编号：").append(response.runId);
+        if (response.durationMs != null) {
+            b.append("\n耗时：").append(response.durationMs).append(" ms");
         }
+        b.append("\n\n").append(response.summary == null ? "(无输出)" : response.summary);
+        if (StringUtils.hasText(response.stderrTail) && !"done".equals(response.status)) {
+            b.append("\n\nstderr 尾部：\n").append(response.stderrTail);
+        }
+        return truncate(b.toString(), 1600);
     }
 
     private String recentChatText(BotConfigEntity bot, String chatId) {

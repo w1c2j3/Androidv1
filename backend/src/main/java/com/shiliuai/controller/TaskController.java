@@ -5,6 +5,7 @@ import com.shiliuai.dto.SaveTasksResponse;
 import com.shiliuai.dto.TaskCreateRequest;
 import com.shiliuai.dto.TaskDto;
 import com.shiliuai.dto.TaskListResponse;
+import com.shiliuai.dto.TaskReassignRequest;
 import com.shiliuai.dto.TaskStatusUpdateRequest;
 import com.shiliuai.service.task.TaskService;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -32,8 +33,9 @@ public class TaskController {
     }
 
     @GetMapping
-    public TaskListResponse list(@RequestParam(required = false) String status) {
-        return taskService.list(status);
+    public TaskListResponse list(@RequestParam(required = false) String status,
+                                 @RequestParam(required = false) String owner) {
+        return taskService.list(status, owner);
     }
 
     @PostMapping
@@ -46,5 +48,28 @@ public class TaskController {
     @PatchMapping("/{taskId}/status")
     public TaskDto updateStatus(@PathVariable String taskId, @RequestBody TaskStatusUpdateRequest request) {
         return taskService.updateStatus(taskId, request);
+    }
+
+    /**
+     * Android 端 HttpURLConnection 不支持 PATCH，这里给一个等价的 POST 入口。
+     */
+    @PostMapping("/{taskId}/status")
+    public TaskDto updateStatusPost(@PathVariable String taskId, @RequestBody TaskStatusUpdateRequest request) {
+        return taskService.updateStatus(taskId, request);
+    }
+
+    /**
+     * 改派任务负责人。同时暴露 PATCH 和 POST 两个动词：
+     * - PATCH 适用于浏览器 / curl
+     * - POST 适用于 Android 端（HttpURLConnection 不支持 PATCH）
+     */
+    @PatchMapping("/{taskId}/owner")
+    public TaskDto reassignPatch(@PathVariable String taskId, @RequestBody TaskReassignRequest request) {
+        return taskService.reassign(taskId, request == null ? null : request.owner);
+    }
+
+    @PostMapping("/{taskId}/owner")
+    public TaskDto reassignPost(@PathVariable String taskId, @RequestBody TaskReassignRequest request) {
+        return taskService.reassign(taskId, request == null ? null : request.owner);
     }
 }

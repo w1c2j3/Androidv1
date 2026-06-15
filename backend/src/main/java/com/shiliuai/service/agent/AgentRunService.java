@@ -27,6 +27,9 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 @Service
 public class AgentRunService {
@@ -39,6 +42,16 @@ public class AgentRunService {
     private final PaperSearchService paperSearchService;
     private final ObjectMapper objectMapper;
     private final Clock clock;
+
+    /**
+     * 异步 run 缓存：手机 → cloudflare quick tunnel → 后端的同步等待会被 100 秒响应窗口截掉。
+     * submitAsync 立刻返回 runId + status=running 的占位 DTO，前端轮询 getRun 直到 status 终止。
+     *
+     * 参考 CodexService.runCache 同一套模式，避免演示时 524。
+     * sweepRetainedRuns 在每次提交时清理 4 小时前的旧记录，避免内存堆积。
+     */
+    private final ConcurrentMap<String, AgentRunDto> runCache = new ConcurrentHashMap<>();
+    private static final long RUN_RETENTION_SECONDS = 4 * 60 * 60L;
 
     public AgentRunService(AgentRunRepository agentRunRepository,
                            TaskService taskService,
@@ -90,10 +103,129 @@ public class AgentRunService {
         return run;
     }
 
+    /**
+     * 异步提交：立刻返回 runId + status=running 的占位 DTO，子线程在后台跑 createRun。
+     *
+     * 设计目的：手机/飞书 → Cloudflare quick tunnel → 后端的同步等待会被 100 秒响应窗口截掉（Error 524）。
+     * 前端在收到 runId 后按 1.5 秒轮询 getRun(runId)，直到 status 命中 Json.isTerminal 列表。
+     */
+    public AgentRunDto submitAsync(CommandRunRequest request) {
+        String command = request == null ? null : request.command;
+        if (!StringUtils.hasText(command)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "命令不能为空");
+        }
+        String intent = inferIntent(command);
+        AgentRunDto placeholder = new AgentRunDto();
+        placeholder.runId = Ids.runId(clock);
+        placeholder.status = "running";
+        placeholder.intent = intent;
+        placeholder.module = moduleFor(intent);
+        placeholder.command = command.trim();
+        placeholder.projectPath = agentAccessPolicy.resolveProjectPath(request == null ? null : request.projectPath);
+        placeholder.source = request != null && StringUtils.hasText(request.source) ? request.source.trim() : "android";
+        placeholder.createdAt = Instant.now(clock).toString();
+        placeholder.requiresConfirmation = "project_review".equals(intent);
+        placeholder.steps = stepsFor(intent);
+        placeholder.summary = "已入队，正在后台运行。前端请轮询 GET /api/v1/agent/runs/" + placeholder.runId;
+
+        runCache.put(placeholder.runId, placeholder);
+        sweepRetainedRuns();
+
+        // 复制 request，避免子线程读到调用方后续修改
+        final CommandRunRequest captured = copyRequest(request);
+        final String reservedRunId = placeholder.runId;
+        Thread worker = new Thread(() -> {
+            try {
+                AgentRunDto done = createRunInternal(captured, reservedRunId);
+                runCache.put(reservedRunId, done);
+            } catch (RuntimeException exception) {
+                AgentRunDto failed = runCache.get(reservedRunId);
+                if (failed == null) {
+                    failed = placeholder;
+                }
+                failed.status = "failed";
+                failed.summary = "Agent 异步执行失败：" + exception.getMessage();
+                failed.completedAt = Instant.now(clock).toString();
+                runCache.put(reservedRunId, failed);
+            }
+        }, "agent-async-" + reservedRunId);
+        worker.setDaemon(true);
+        worker.start();
+        return placeholder;
+    }
+
     public AgentRunDto getRun(String runId) {
+        // 缓存先行：异步运行期间数据库还没写入，只在缓存里
+        AgentRunDto cached = runCache.get(runId);
+        if (cached != null) {
+            return cached;
+        }
         return agentRunRepository.findById(runId)
                 .map(this::fromEntity)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "AgentRun 不存在"));
+    }
+
+    /**
+     * 与 createRun 等价，但接受预分配的 runId（让 submitAsync 占位和最终结果共用同一个 ID）。
+     */
+    private AgentRunDto createRunInternal(CommandRunRequest request, String reservedRunId) {
+        String command = request == null ? null : request.command;
+        if (!StringUtils.hasText(command)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "命令不能为空");
+        }
+        String intent = inferIntent(command);
+        AgentRunDto run = new AgentRunDto();
+        run.runId = StringUtils.hasText(reservedRunId) ? reservedRunId : Ids.runId(clock);
+        run.status = "done";
+        run.intent = intent;
+        run.module = moduleFor(intent);
+        run.command = command.trim();
+        run.projectPath = agentAccessPolicy.resolveProjectPath(request == null ? null : request.projectPath);
+        run.source = request != null && StringUtils.hasText(request.source) ? request.source.trim() : "android";
+        run.createdAt = Instant.now(clock).toString();
+        run.requiresConfirmation = "project_review".equals(intent);
+        run.steps = stepsFor(intent);
+        fillResult(run, request);
+        run.logs.addAll(logsFor(run));
+        run.completedAt = Instant.now(clock).toString();
+        agentRunRepository.save(toEntity(run));
+        if (request != null && Boolean.TRUE.equals(request.saveTasks) && !run.tasks.isEmpty()) {
+            taskService.saveCandidates(run.tasks, "agent:" + run.intent, run.runId);
+        }
+        if ("memory".equals(run.intent)) {
+            saveMemoryFromRun(run);
+        }
+        return run;
+    }
+
+    private static CommandRunRequest copyRequest(CommandRunRequest src) {
+        if (src == null) return null;
+        CommandRunRequest copy = new CommandRunRequest();
+        copy.command = src.command;
+        copy.projectPath = src.projectPath;
+        copy.source = src.source;
+        copy.contextText = src.contextText;
+        copy.chatId = src.chatId;
+        copy.traceId = src.traceId;
+        copy.saveTasks = src.saveTasks;
+        return copy;
+    }
+
+    private void sweepRetainedRuns() {
+        Instant now = Instant.now(clock);
+        for (Map.Entry<String, AgentRunDto> entry : runCache.entrySet()) {
+            AgentRunDto value = entry.getValue();
+            String stamp = value.completedAt != null ? value.completedAt : value.createdAt;
+            if (stamp == null) continue;
+            try {
+                Instant t = Instant.parse(stamp);
+                if (t.plusSeconds(RUN_RETENTION_SECONDS).isBefore(now)) {
+                    runCache.remove(entry.getKey(), value);
+                }
+            } catch (Exception ignored) {
+                // 时间戳异常的记录直接保留，等下次再尝试
+            }
+        }
     }
 
     public AgentRunListResponse listRuns() {
@@ -224,7 +356,22 @@ public class AgentRunService {
                 ? contextText.trim()
                 : inlineText.trim();
         List<String> lines = digestLines(input);
-        String modelAnswer = llmChatService.answerText("请把下面真实输入整理成摘要、决策、任务、风险和下一步，保持简洁：\n" + input);
+        // Prompt 护栏：当上游传进来 OCR + 错误返回混在一起时（例如「Codex 524」「HTTP 5xx」），
+        // 旧 prompt 会让 LLM 把错误一起总结，最终摘要变成「Codex 调用失败」之类的误导文本。
+        // 这里显式要求模型识别并跳过错误/堆栈文本，只整理真实内容。
+        String prompt = """
+                你是视流 AI 的截图/聊天总结器。请把下面输入整理成摘要、决策、任务、风险和下一步，保持简洁。
+
+                重要规则：
+                - 如果输入里包含 HTTP 错误（如 500/502/503/504/524）、stacktrace、JSON 报错（status=failed/timeout/error）、
+                  「调用失败」「请求超时」等系统消息，请把它们当作"无关噪声"忽略，不要写进摘要。
+                - 如果排除噪声后没有任何真实业务内容，请明确回复"没有可总结的真实内容"，不要凭空编造。
+                - 只整理真实业务文本（聊天、需求、决策、待办、截图正文）。
+
+                输入：
+                %s
+                """.formatted(input);
+        String modelAnswer = llmChatService.answerText(prompt);
         if (StringUtils.hasText(modelAnswer)
                 && !modelAnswer.startsWith("我已收到消息")
                 && !modelAnswer.startsWith("模型没有返回有效内容")) {

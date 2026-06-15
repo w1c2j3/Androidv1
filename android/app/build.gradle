@@ -5,7 +5,7 @@ plugins {
 def escapeBuildConfigString = { value ->
     (value ?: "").replace("\\", "\\\\").replace("\"", "\\\"")
 }
-def mobileBackendUrl = escapeBuildConfigString(System.getenv("SHILIU_MOBILE_BACKEND_URL") ?: "http://10.0.2.2:8080")
+def mobileBackendUrl = escapeBuildConfigString(System.getenv("SHILIU_MOBILE_BACKEND_URL") ?: "http://10.0.2.2:8000")
 def mobileAdminToken = escapeBuildConfigString(System.getenv("SHILIU_ADMIN_TOKEN") ?: "")
 def mobileProjectPath = escapeBuildConfigString(System.getenv("SHILIU_PROJECT_PATH") ?: "/home/chase/GitHub/shiliu-ai-v1")
 def mobileBotId = escapeBuildConfigString(System.getenv("SHILIU_FEISHU_BOTS_0_BOT_ID") ?: "")
@@ -41,6 +41,4 @@ android {
 }
 
 dependencies {
-    implementation "androidx.appcompat:appcompat:1.7.0"
-    implementation "com.google.android.material:material:1.12.0"
 }

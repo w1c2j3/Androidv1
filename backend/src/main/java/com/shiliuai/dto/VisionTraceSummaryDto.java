@@ -8,6 +8,9 @@ public class VisionTraceSummaryDto {
     public String stage;
     public int progress;
     public String summaryTitle;
+    public String extractMode;
+    public Double ocrConfidence;
+    public Double extractConfidence;
     public int taskCount;
     public int linkCount;
     public int riskCount;

@@ -1,11 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.ShiliuAI" parent="Theme.MaterialComponents.DayNight.NoActionBar">
-        <item name="colorPrimary">@color/shiliu_primary</item>
-        <item name="colorPrimaryVariant">@color/shiliu_primary_dark</item>
-        <item name="colorOnPrimary">#FFFFFF</item>
-        <item name="android:fontFamily">sans</item>
-        <item name="android:windowLightStatusBar">true</item>
-        <item name="android:navigationBarColor">@color/shiliu_background</item>
+    <style name="Theme.ShiliuAI" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:colorAccent">@color/zzz_signal</item>
+        <item name="android:colorPrimary">@color/zzz_signal</item>
+        <item name="android:colorPrimaryDark">@color/zzz_void</item>
+        <item name="android:windowBackground">@color/zzz_void</item>
+        <item name="android:textColor">@color/zzz_text</item>
+        <item name="android:textColorPrimary">@color/zzz_text</item>
+        <item name="android:textColorSecondary">@color/zzz_text_dim</item>
+        <item name="android:textColorHint">@color/zzz_text_mute</item>
+        <item name="android:fontFamily">sans-serif</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:statusBarColor">@color/zzz_void</item>
+        <item name="android:navigationBarColor">@color/zzz_carbon</item>
     </style>
 </resources>

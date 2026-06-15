@@ -8,6 +8,13 @@ import java.util.Map;
 public class OcrResult {
     public String traceId;
     public String imageType;
+    public String engine;
+    public String engineVersion;
+    public String modelProfile;
+    public String lang;
+    public Long latencyMs;
+    public Double averageConfidence;
+    public Double minConfidence;
     public int width;
     public int height;
     public List<OcrBlock> blocks = new ArrayList<>();

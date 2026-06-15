@@ -52,6 +52,15 @@ public class VisionController {
         return visionPipelineService.getResult(traceId);
     }
 
+    /**
+     * 仅重跑结构化抽取阶段：保留持久化的 OCR JSON，重新调用 ExtractService（默认 LLM）。
+     * 替代之前前端用 /agent/runs + /digest 重跑 LLM 的做法，避免把上一轮错误 JSON 喂回模型。
+     */
+    @PostMapping("/results/{traceId}/reextract")
+    public VisionResultResponse reextract(@PathVariable String traceId) {
+        return visionPipelineService.reextract(traceId);
+    }
+
     @GetMapping("/traces")
     public VisionTraceListResponse traces(@RequestParam(defaultValue = "20") int limit) {
         return visionPipelineService.listTraces(limit);

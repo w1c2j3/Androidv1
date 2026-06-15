@@ -13,6 +13,8 @@ class EnginesTest(unittest.TestCase):
             result = engine.recognize(image.name, "trace_1")
         self.assertEqual("任务", result.plainText)
         self.assertEqual("trace_1", result.traceId)
+        self.assertEqual("static", result.engine)
+        self.assertEqual("test", result.engineVersion)
 
     def test_paddle_constructor_candidates_include_profile_models(self):
         engine = PaddleOcrEngine(OcrSettings(model_profile="server"))
@@ -28,4 +30,3 @@ class EnginesTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

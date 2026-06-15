@@ -21,6 +21,7 @@ def int_env(name: str, default: int) -> int:
 
 @dataclass(frozen=True)
 class OcrSettings:
+    engine: str = "paddleocr"
     lang: str = "ch"
     model_profile: str = "mobile"
     use_textline_orientation: bool = True
@@ -32,6 +33,7 @@ class OcrSettings:
     @classmethod
     def from_env(cls) -> "OcrSettings":
         return cls(
+            engine=os.getenv("OCR_ENGINE", "paddleocr").strip().lower() or "paddleocr",
             lang=os.getenv("OCR_LANG", "ch").strip() or "ch",
             model_profile=os.getenv("OCR_MODEL_PROFILE", "mobile").strip().lower() or "mobile",
             use_textline_orientation=bool_env("OCR_USE_TEXTLINE_ORIENTATION", True),

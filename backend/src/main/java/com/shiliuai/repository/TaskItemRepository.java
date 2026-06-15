@@ -11,6 +11,11 @@ public interface TaskItemRepository extends JpaRepository<TaskItemEntity, String
 
     List<TaskItemEntity> findAllByOrderByCreatedAtDesc();
 
+    // 团队化工作台：按负责人筛选，区分大小写但允许空格 trim 在 service 层做
+    List<TaskItemEntity> findByOwnerOrderByCreatedAtDesc(String owner);
+
+    List<TaskItemEntity> findByStatusAndOwnerOrderByCreatedAtDesc(String status, String owner);
+
     long countByStatus(String status);
 
     long countByCreatedAtAfter(Instant createdAt);

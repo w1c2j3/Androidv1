@@ -23,6 +23,13 @@ public class VisionTraceEntity {
     private String ocrJson;
     @Column(columnDefinition = "text")
     private String extractJson;
+    private String ocrEngine;
+    private Double ocrConfidence;
+    private String extractMode;
+    private String llmModel;
+    private Double extractConfidence;
+    @Column(columnDefinition = "text")
+    private String extractError;
     private String imagePath;
     private String errorCode;
     @Column(columnDefinition = "text")
@@ -100,6 +107,54 @@ public class VisionTraceEntity {
 
     public void setExtractJson(String extractJson) {
         this.extractJson = extractJson;
+    }
+
+    public String getOcrEngine() {
+        return ocrEngine;
+    }
+
+    public void setOcrEngine(String ocrEngine) {
+        this.ocrEngine = ocrEngine;
+    }
+
+    public Double getOcrConfidence() {
+        return ocrConfidence;
+    }
+
+    public void setOcrConfidence(Double ocrConfidence) {
+        this.ocrConfidence = ocrConfidence;
+    }
+
+    public String getExtractMode() {
+        return extractMode;
+    }
+
+    public void setExtractMode(String extractMode) {
+        this.extractMode = extractMode;
+    }
+
+    public String getLlmModel() {
+        return llmModel;
+    }
+
+    public void setLlmModel(String llmModel) {
+        this.llmModel = llmModel;
+    }
+
+    public Double getExtractConfidence() {
+        return extractConfidence;
+    }
+
+    public void setExtractConfidence(Double extractConfidence) {
+        this.extractConfidence = extractConfidence;
+    }
+
+    public String getExtractError() {
+        return extractError;
+    }
+
+    public void setExtractError(String extractError) {
+        this.extractError = extractError;
     }
 
     public String getImagePath() {

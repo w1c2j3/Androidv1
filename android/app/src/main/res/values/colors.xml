@@ -1,10 +1,29 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="shiliu_primary">#2563EB</color>
-    <color name="shiliu_primary_dark">#1E40AF</color>
-    <color name="shiliu_background">#F7F8FA</color>
-    <color name="shiliu_surface">#FFFFFF</color>
-    <color name="shiliu_border">#E5E7EB</color>
-    <color name="shiliu_text">#111827</color>
-    <color name="shiliu_muted">#6B7280</color>
+    <!-- 视流 AI · ZZZ 风格调色板 -->
+    <!-- 画布 -->
+    <color name="zzz_void">#0A0B0E</color>
+    <color name="zzz_carbon">#13151B</color>
+    <color name="zzz_carbon_alt">#1B1E27</color>
+    <color name="zzz_grid">#262A36</color>
+    <color name="zzz_scanline">#1FFFFFFF</color>
+
+    <!-- 信号色 -->
+    <color name="zzz_signal">#F5FF3D</color>
+    <color name="zzz_signal_dim">#A8B019</color>
+    <color name="zzz_signal_soft">#33F5FF3D</color>
+
+    <!-- 状态 -->
+    <color name="zzz_ok">#2BFFB0</color>
+    <color name="zzz_ok_soft">#262BFFB0</color>
+    <color name="zzz_alert">#FF8A1F</color>
+    <color name="zzz_alert_soft">#26FF8A1F</color>
+    <color name="zzz_danger">#FF2E4D</color>
+    <color name="zzz_danger_soft">#26FF2E4D</color>
+
+    <!-- 文本 -->
+    <color name="zzz_text">#F5F6FA</color>
+    <color name="zzz_text_dim">#9AA0B4</color>
+    <color name="zzz_text_mute">#5A6075</color>
+    <color name="zzz_text_invert">#0A0B0E</color>
 </resources>

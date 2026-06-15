@@ -32,7 +32,9 @@ public class HttpOcrProvider implements OcrProvider {
     public HttpOcrProvider(RestClient.Builder builder, ShiliuProperties properties, ObjectMapper objectMapper) {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(Duration.ofSeconds(3));
-        factory.setReadTimeout(Duration.ofSeconds(75));
+        // OCR 服务真实端到端 30-90s（含 PaddleOCR 推理 + 大图）；旧值 75s 偏紧。
+        // 拉到 95s 给 PP-OCRv5 + 5MB 图留余量，仍小于 Cloudflare quick tunnel 100s 窗口。
+        factory.setReadTimeout(Duration.ofSeconds(95));
         this.restClient = builder.requestFactory(factory).build();
         this.properties = properties;
         this.objectMapper = objectMapper;
@@ -68,11 +70,19 @@ public class HttpOcrProvider implements OcrProvider {
         OcrResult result = new OcrResult();
         result.traceId = text(node, "traceId", fallbackTraceId);
         result.imageType = text(node, "imageType", "unknown");
+        result.engine = text(node, "engine", null);
+        result.engineVersion = text(node, "engineVersion", null);
+        result.modelProfile = text(node, "modelProfile", null);
+        result.lang = text(node, "lang", null);
+        result.latencyMs = node.hasNonNull("latencyMs") ? node.path("latencyMs").asLong() : null;
+        result.averageConfidence = node.hasNonNull("averageConfidence") ? node.path("averageConfidence").asDouble() : null;
+        result.minConfidence = node.hasNonNull("minConfidence") ? node.path("minConfidence").asDouble() : null;
         result.width = node.path("width").asInt(0);
         result.height = node.path("height").asInt(0);
         result.plainText = firstText(node, List.of("plainText", "plain_text", "text", "ocrText"));
         result.blocks = parseBlocks(node.path("blocks"));
         result.quality = parseObject(node.path("quality"));
+        fillConfidence(result);
 
         if ((result.plainText == null || result.plainText.isBlank()) && !result.blocks.isEmpty()) {
             StringBuilder builder = new StringBuilder();
@@ -90,6 +100,24 @@ public class HttpOcrProvider implements OcrProvider {
             result.plainText = "";
         }
         return result;
+    }
+
+    private static void fillConfidence(OcrResult result) {
+        if (result.blocks == null || result.blocks.isEmpty()) {
+            return;
+        }
+        if (result.averageConfidence == null) {
+            result.averageConfidence = result.blocks.stream()
+                    .mapToDouble(block -> block.confidence)
+                    .average()
+                    .orElse(0.0);
+        }
+        if (result.minConfidence == null) {
+            result.minConfidence = result.blocks.stream()
+                    .mapToDouble(block -> block.confidence)
+                    .min()
+                    .orElse(0.0);
+        }
     }
 
     private List<OcrBlock> parseBlocks(JsonNode blocksNode) {

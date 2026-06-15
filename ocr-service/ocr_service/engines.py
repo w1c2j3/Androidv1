@@ -1,4 +1,5 @@
 from pathlib import Path
+import time
 from typing import Any, Protocol
 
 from .converter import build_ocr_result
@@ -17,8 +18,15 @@ class PaddleOcrEngine:
         self._ocr: Any | None = None
 
     def recognize(self, image_path: str | Path, trace_id: str, source: str = "", hints: dict[str, Any] | None = None) -> OcrResult:
+        started = time.perf_counter()
         raw_output = self._predict(image_path)
-        return build_ocr_result(trace_id=trace_id, image_path=image_path, raw_output=raw_output, hints=hints)
+        result = build_ocr_result(trace_id=trace_id, image_path=image_path, raw_output=raw_output, hints=hints)
+        result.engine = self.settings.engine
+        result.engineVersion = "PP-OCRv5"
+        result.modelProfile = self.settings.model_profile
+        result.lang = self.settings.lang
+        result.latencyMs = int((time.perf_counter() - started) * 1000)
+        return result
 
     def _predict(self, image_path: str | Path) -> Any:
         ocr = self._get_ocr()
@@ -82,4 +90,7 @@ class StaticOcrEngine:
         self.raw_output = raw_output
 
     def recognize(self, image_path: str | Path, trace_id: str, source: str = "", hints: dict[str, Any] | None = None) -> OcrResult:
-        return build_ocr_result(trace_id=trace_id, image_path=image_path, raw_output=self.raw_output, hints=hints)
+        result = build_ocr_result(trace_id=trace_id, image_path=image_path, raw_output=self.raw_output, hints=hints)
+        result.engine = "static"
+        result.engineVersion = "test"
+        return result

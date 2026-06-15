@@ -130,6 +130,8 @@ class ConverterTest(unittest.TestCase):
             result = build_ocr_result("trace_1", image.name, raw, {"expectedScene": "auto"})
         self.assertEqual("第一行\n第二行", result.plainText)
         self.assertEqual("trace_1", result.traceId)
+        self.assertEqual(0.85, result.averageConfidence)
+        self.assertEqual(0.8, result.minConfidence)
 
     def test_build_result_uses_hint_scene(self):
         with tempfile.NamedTemporaryFile(suffix=".png") as image:
@@ -145,4 +147,3 @@ class ConverterTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

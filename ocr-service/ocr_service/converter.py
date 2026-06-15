@@ -15,11 +15,14 @@ def build_ocr_result(
     width, height = image_size(image_path)
     blocks = parse_blocks(raw_output)
     plain_text = "\n".join(block.text for block in blocks if block.text.strip())
+    confidences = [block.confidence for block in blocks]
     return OcrResult(
         traceId=trace_id,
         imageType=classify_image_type(hints, plain_text),
         width=width,
         height=height,
+        averageConfidence=round(sum(confidences) / len(confidences), 6) if confidences else 0.0,
+        minConfidence=round(min(confidences), 6) if confidences else 0.0,
         blocks=blocks,
         plainText=plain_text,
         quality=image_quality(image_path),

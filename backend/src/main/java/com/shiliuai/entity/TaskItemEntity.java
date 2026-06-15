@@ -2,6 +2,7 @@ package com.shiliuai.entity;
 
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
+import jakarta.persistence.Column;
 import jakarta.persistence.Table;
 
 import java.time.Instant;
@@ -18,7 +19,12 @@ public class TaskItemEntity {
     private String priority;
     private String status;
     private String source;
+    private String sourceType;
+    private String sourceId;
     private String traceId;
+    @Column(columnDefinition = "text")
+    private String evidenceText;
+    private Boolean confirmedByUser;
     private Double confidence;
     private Instant createdAt;
 
@@ -86,12 +92,44 @@ public class TaskItemEntity {
         this.source = source;
     }
 
+    public String getSourceType() {
+        return sourceType;
+    }
+
+    public void setSourceType(String sourceType) {
+        this.sourceType = sourceType;
+    }
+
+    public String getSourceId() {
+        return sourceId;
+    }
+
+    public void setSourceId(String sourceId) {
+        this.sourceId = sourceId;
+    }
+
     public String getTraceId() {
         return traceId;
     }
 
     public void setTraceId(String traceId) {
         this.traceId = traceId;
+    }
+
+    public String getEvidenceText() {
+        return evidenceText;
+    }
+
+    public void setEvidenceText(String evidenceText) {
+        this.evidenceText = evidenceText;
+    }
+
+    public Boolean getConfirmedByUser() {
+        return confirmedByUser;
+    }
+
+    public void setConfirmedByUser(Boolean confirmedByUser) {
+        this.confirmedByUser = confirmedByUser;
     }
 
     public Double getConfidence() {

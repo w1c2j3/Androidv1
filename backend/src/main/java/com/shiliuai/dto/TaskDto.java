@@ -9,7 +9,11 @@ public class TaskDto {
     public String priority;
     public String status;
     public String source;
+    public String sourceType;
+    public String sourceId;
     public String traceId;
+    public String evidenceText;
+    public Boolean confirmedByUser;
     public Double confidence;
     public String createdAt;
 }

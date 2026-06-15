@@ -1,5 +1,5 @@
 server:
-  port: "${SERVER_PORT:8080}"
+  port: "${SERVER_PORT:8000}"
 
 spring:
   application:
@@ -24,11 +24,23 @@ spring:
     show-sql: false
 
 shiliu:
-  public-base-url: "${SHILIU_PUBLIC_BASE_URL:http://localhost:8080}"
+  public-base-url: "${SHILIU_PUBLIC_BASE_URL:http://localhost:8000}"
   admin-token: "${SHILIU_ADMIN_TOKEN:dev-admin-token}"
   file-storage-dir: "${SHILIU_FILE_STORAGE_DIR:./data/files}"
   agent:
     allowed-project-roots: "${SHILIU_AGENT_ALLOWED_PROJECT_ROOTS:/home/chase/GitHub/shiliu-ai-v1}"
+  codex:
+    enabled: "${SHILIU_CODEX_ENABLED:true}"
+    binary: "${SHILIU_CODEX_BINARY:codex}"
+    working-dir: "${SHILIU_CODEX_WORKING_DIR:/home/chase/GitHub/shiliu-ai-v1}"
+    allowed-working-roots: "${SHILIU_CODEX_ALLOWED_WORKING_ROOTS:${SHILIU_CODEX_WORKING_DIR:/home/chase/GitHub/shiliu-ai-v1}}"
+    timeout-seconds: "${SHILIU_CODEX_TIMEOUT_SECONDS:110}"
+    extra-args: "${SHILIU_CODEX_EXTRA_ARGS:}"
+    home: "${SHILIU_CODEX_HOME:}"
+  task-cleanup:
+    # 设置 true 后启动时会清空 task_items 表（用于团队上线时一次性清理演示任务）。
+    # 默认 false，避免后续每次启动都误删团队任务。
+    enabled: "${SHILIU_TASK_CLEANUP_ENABLED:false}"
   ocr:
     http-endpoint: "${SHILIU_OCR_HTTP_ENDPOINT:http://localhost:9000/ocr}"
   llm:

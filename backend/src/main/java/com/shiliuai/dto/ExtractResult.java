@@ -5,6 +5,13 @@ import java.util.List;
 
 public class ExtractResult {
     public String traceId;
+    public String scene;
+    public String extractMode;
+    public String llmModel;
+    public Double ocrConfidence;
+    public Double extractConfidence;
+    public String rawModelJson;
+    public String extractError;
     public SummaryDto summary;
     public List<TaskCandidateDto> tasks = new ArrayList<>();
     public List<LinkCandidateDto> links = new ArrayList<>();

@@ -29,6 +29,7 @@ class SettingsTest(unittest.TestCase):
 
     def test_settings_defaults(self):
         settings = OcrSettings()
+        self.assertEqual("paddleocr", settings.engine)
         self.assertEqual("ch", settings.lang)
         self.assertEqual("mobile", settings.model_profile)
         self.assertFalse(settings.enable_mkldnn)
@@ -37,6 +38,7 @@ class SettingsTest(unittest.TestCase):
     def test_settings_from_env(self):
         env = {
             "OCR_LANG": "en",
+            "OCR_ENGINE": "rapidocr",
             "OCR_MODEL_PROFILE": "server",
             "OCR_USE_TEXTLINE_ORIENTATION": "false",
             "OCR_USE_DOC_ORIENTATION": "true",
@@ -47,6 +49,7 @@ class SettingsTest(unittest.TestCase):
         with patch.dict(os.environ, env, clear=True):
             settings = OcrSettings.from_env()
         self.assertEqual("en", settings.lang)
+        self.assertEqual("rapidocr", settings.engine)
         self.assertEqual("server", settings.model_profile)
         self.assertFalse(settings.use_textline_orientation)
         self.assertTrue(settings.use_doc_orientation)

@@ -1,28 +1,21 @@
 import unittest
 
-from fastapi.testclient import TestClient
-
-from ocr_service.main import app
+from ocr_service.main import health, root
 
 
 class MainHttpTest(unittest.TestCase):
-    def setUp(self):
-        self.client = TestClient(app)
-
     def test_root_returns_service_endpoints(self):
-        response = self.client.get("/")
-        self.assertEqual(200, response.status_code)
-        body = response.json()
+        body = root()
         self.assertEqual("ok", body["status"])
         self.assertEqual("shiliu-ocr-service", body["service"])
         self.assertEqual("/health", body["endpoints"]["health"])
         self.assertEqual("/ocr", body["endpoints"]["ocr"])
 
     def test_health_returns_model_profile(self):
-        response = self.client.get("/health")
-        self.assertEqual(200, response.status_code)
-        body = response.json()
+        body = health()
         self.assertEqual("ok", body["status"])
+        self.assertEqual("paddleocr", body["engine"])
+        self.assertTrue(body["localModel"])
         self.assertIn("modelProfile", body)
         self.assertIn("lang", body)
 

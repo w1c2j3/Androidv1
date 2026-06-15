@@ -26,6 +26,15 @@ public class AgentRunController {
         return agentRunService.createRun(request);
     }
 
+    /**
+     * 异步提交：立即返回 runId + status=running 的占位，避免 Cloudflare 100 秒响应窗口截断。
+     * 前端拿到 runId 后按 1.5 秒间隔轮询 GET /runs/{runId}，直到 Json.isTerminal 终止状态。
+     */
+    @PostMapping("/runs/submit")
+    public AgentRunDto submit(@RequestBody CommandRunRequest request) {
+        return agentRunService.submitAsync(request);
+    }
+
     @GetMapping("/runs")
     public AgentRunListResponse list() {
         return agentRunService.listRuns();

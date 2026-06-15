@@ -6,6 +6,10 @@ import com.shiliuai.dto.FileRef;
 import com.shiliuai.dto.OcrBlock;
 import com.shiliuai.dto.OcrResult;
 import com.shiliuai.dto.PaperDto;
+import com.shiliuai.entity.FeishuCardActionLogEntity;
+import com.shiliuai.repository.FeishuCardActionLogRepository;
+import com.shiliuai.repository.ReportMaterialRepository;
+import com.shiliuai.repository.VisionTraceRepository;
 import com.shiliuai.service.feishu.FeishuClientAdapter;
 import com.shiliuai.service.feishu.FeishuResourceDownloader;
 import com.shiliuai.service.feishu.FeishuTokenProvider;
@@ -22,6 +26,7 @@ import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -55,6 +60,15 @@ class BackendSmokeTest {
     @Autowired
     ExternalServiceStubs.RecordingFeishuClientAdapter feishuClientAdapter;
 
+    @Autowired
+    ReportMaterialRepository reportMaterialRepository;
+
+    @Autowired
+    VisionTraceRepository visionTraceRepository;
+
+    @Autowired
+    FeishuCardActionLogRepository feishuCardActionLogRepository;
+
     @Test
     void healthReturnsOk() throws Exception {
         mockMvc.perform(get("/api/v1/health"))
@@ -79,6 +93,8 @@ class BackendSmokeTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.backendOk").value(true))
                 .andExpect(jsonPath("$.ocrConfigured").value(true))
+                .andExpect(jsonPath("$.llmConfigured").value(false))
+                .andExpect(jsonPath("$.llmModel").value("gpt-4o-mini"))
                 .andExpect(jsonPath("$.botRegistered").value(true))
                 .andExpect(jsonPath("$.tokenValid").value(true))
                 .andExpect(jsonPath("$.ready").value(false))
@@ -107,9 +123,13 @@ class BackendSmokeTest {
                 .andExpect(jsonPath("$.progress").value(100))
                 .andExpect(jsonPath("$.tasks.length()").value(greaterThanOrEqualTo(1)))
                 .andExpect(jsonPath("$.dailyReportMaterials.length()").value(greaterThanOrEqualTo(1)))
+                .andExpect(jsonPath("$.extractMode").value("rule_fallback"))
+                .andExpect(jsonPath("$.ocrConfidence").value(greaterThanOrEqualTo(0.9)))
                 .andExpect(jsonPath("$.ocr.blockCount").value(3))
+                .andExpect(jsonPath("$.ocr.averageConfidence").value(greaterThanOrEqualTo(0.9)))
                 .andExpect(jsonPath("$.ocr.width").value(1080))
                 .andExpect(jsonPath("$.ocr.blocks[0].id").value("b1"))
+                .andExpect(jsonPath("$.tasks[0].evidence").isNotEmpty())
                 .andExpect(jsonPath("$.tasks[0].sourceBlockIds[0]").value("b1"));
 
         mockMvc.perform(post("/api/v1/tasks/from-trace/{traceId}", traceId)
@@ -118,11 +138,32 @@ class BackendSmokeTest {
                         .content("{\"selectedTaskTempIds\":[\"task_tmp_1\"],\"override\":{\"owner\":\"我\"}}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.savedCount").value(1))
-                .andExpect(jsonPath("$.tasks[0].owner").value("我"));
+                .andExpect(jsonPath("$.tasks[0].owner").value("我"))
+                .andExpect(jsonPath("$.tasks[0].sourceType").value("vision_trace"))
+                .andExpect(jsonPath("$.tasks[0].sourceId").value(traceId))
+                .andExpect(jsonPath("$.tasks[0].evidenceText").isNotEmpty());
+
+        org.assertj.core.api.Assertions.assertThat(reportMaterialRepository.findByTraceIdOrderByCreatedAtAsc(traceId))
+                .isNotEmpty();
+        org.assertj.core.api.Assertions.assertThat(visionTraceRepository.findById(traceId))
+                .get()
+                .satisfies(trace -> {
+                    org.assertj.core.api.Assertions.assertThat(trace.getExtractMode()).isEqualTo("rule_fallback");
+                    org.assertj.core.api.Assertions.assertThat(trace.getOcrConfidence()).isGreaterThan(0.9);
+                });
 
         mockMvc.perform(get("/api/v1/tasks?status=todo").header("Authorization", AUTH))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items.length()").value(greaterThanOrEqualTo(1)));
+    }
+
+    @Test
+    void uploadWithoutFilenameSuffixUsesContentTypeExtension() throws Exception {
+        String traceId = startVisionUpload("android_upload", "auto", "content-uri", "image/png");
+        waitForVisionStatus(traceId, "done");
+        org.assertj.core.api.Assertions.assertThat(visionTraceRepository.findById(traceId))
+                .get()
+                .satisfies(trace -> org.assertj.core.api.Assertions.assertThat(trace.getImagePath()).endsWith(".png"));
     }
 
     @Test
@@ -160,6 +201,13 @@ class BackendSmokeTest {
                         .content("{\"status\":\"in_progress\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("in_progress"));
+
+        mockMvc.perform(post("/api/v1/tasks/{taskId}/status", taskId)
+                        .header("Authorization", AUTH)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"done\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("done"));
 
         mockMvc.perform(patch("/api/v1/tasks/{taskId}/status", taskId)
                         .header("Authorization", AUTH)
@@ -308,10 +356,24 @@ class BackendSmokeTest {
                                   "header":{"token":"token_xxx"},
                                   "event":{"action":{"value":{"action":"save_tasks","traceId":"%s"}}}
                                 }
-                                """.formatted(traceId)))
+                """.formatted(traceId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.toast.type").value("success"))
                 .andExpect(jsonPath("$.card.header.title.content").value("任务保存成功"));
+
+        FeishuCardActionLogEntity legacySuccess = new FeishuCardActionLogEntity();
+        legacySuccess.setId("legacy_success_log");
+        legacySuccess.setBotId(botId);
+        legacySuccess.setTraceId(traceId);
+        legacySuccess.setAction("legacy_success");
+        legacySuccess.setStatus("success");
+        legacySuccess.setCreatedAt(Instant.now().plusSeconds(1));
+        feishuCardActionLogRepository.save(legacySuccess);
+
+        mockMvc.perform(get("/api/v1/workbench/overview").header("Authorization", AUTH))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.recentCardActions.length()").value(greaterThanOrEqualTo(1)))
+                .andExpect(jsonPath("$.recentCardActions[0].status").value("ok"));
     }
 
     @Test
@@ -376,6 +438,11 @@ class BackendSmokeTest {
                         .content(body))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(0));
+
+        mockMvc.perform(get("/api/v1/bots/{botId}/health", botId).header("Authorization", AUTH))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("ok"))
+                .andExpect(jsonPath("$.eventCallbackVerified").value(true));
     }
 
     @Test
@@ -484,10 +551,14 @@ class BackendSmokeTest {
     }
 
     private String startVisionUpload(String source, String sceneHint) throws Exception {
+        return startVisionUpload(source, sceneHint, "screenshot.png", "image/png");
+    }
+
+    private String startVisionUpload(String source, String sceneHint, String filename, String contentType) throws Exception {
         MockMultipartFile image = new MockMultipartFile(
                 "file",
-                "screenshot.png",
-                "image/png",
+                filename,
+                contentType,
                 "fake image".getBytes()
         );
         String uploadJson = mockMvc.perform(multipart("/api/v1/vision/upload")
@@ -569,6 +640,10 @@ class BackendSmokeTest {
                 result.imageType = "chat_screenshot";
                 result.width = 1080;
                 result.height = 2340;
+                result.engine = "static";
+                result.engineVersion = "test";
+                result.modelProfile = "mobile";
+                result.lang = "ch";
                 result.plainText = "明天下班前把权限方案整理一下\n还要考虑 Android Studio 真机测试\nhttps://example.com";
                 result.blocks = List.of(
                         block("b1", "明天下班前把权限方案整理一下", 120, 410, 920, 468, 0.94),
